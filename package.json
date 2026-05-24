@@ -1,7 +1,7 @@
 {
   "name": "bidernet-content-calendar",
   "private": true,
-  "version": "2.1.5",
+  "version": "2.1.7",
   "description": "מערכת ניהול גאנטי תוכן עבור bidernet group",
   "type": "module",
   "scripts": {

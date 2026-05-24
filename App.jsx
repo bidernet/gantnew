@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from 'lucide-react';
 
 // ============== VERSION INFO ==============
-// VERSION: v2.1.5 - 24/05/2026
-// CHANGE: Added Branding Settings modal accessible from admin header
+// VERSION: v2.1.7 - 24/05/2026
+// CHANGE: Timeline view now filters by current month with navigation arrows
 // Console will log this on app start to verify correct version is running
 if (typeof window !== 'undefined') {
-  console.log('%c🎯 bidernet Content Calendar v2.1.5', 'color: #6366f1; font-size: 14px; font-weight: bold;');
-  console.log('%c✓ Branding Settings modal added to admin header', 'color: #10b981;');
+  console.log('%c🎯 bidernet Content Calendar v2.1.7', 'color: #6366f1; font-size: 14px; font-weight: bold;');
+  console.log('%c✓ Monthly filtering with navigation (admin + client timeline)', 'color: #10b981;');
 }
 
 
@@ -147,8 +147,66 @@ export default function ContentCalendarApp() {
         await window.storage.set('users', JSON.stringify(users));
       }
 
-      // Step 1.5: Check for share token in URL (e.g., #share=Xy9k2Bn7Q4)
+      // Step 1.5: Check for embedded data in URL (e.g., #data=eyJ1Ijp7...)
+      // This is the new method - works on any device without server!
       const hash = window.location.hash;
+      const dataMatch = hash.match(/data=([A-Za-z0-9\-_]+)/);
+      if (dataMatch) {
+        try {
+          // Decode base64 URL-safe data
+          const encoded = dataMatch[1];
+          const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+          // Add padding if needed
+          const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+          const binary = atob(padded);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          const json = new TextDecoder().decode(bytes);
+          const payload = JSON.parse(json);
+          
+          if (payload.u && payload.u.role === 'client') {
+            // Save posts to local storage for this client (so they can see them)
+            if (payload.p && Array.isArray(payload.p)) {
+              try {
+                // Merge with existing posts (preserve other clients' posts if any)
+                const existingResult = await window.storage.get('content-posts');
+                let existing = [];
+                if (existingResult && existingResult.value) {
+                  existing = JSON.parse(existingResult.value);
+                }
+                // Remove old posts for this business, add new ones from URL
+                const otherPosts = existing.filter(p => p.businessName !== payload.u.businessName);
+                const mergedPosts = [...otherPosts, ...payload.p];
+                await window.storage.set('content-posts', JSON.stringify(mergedPosts));
+              } catch (e) {
+                // If storage fails, posts will still be in memory via payload
+                console.warn('Could not cache posts:', e);
+              }
+            }
+            
+            // Apply branding from URL if provided
+            if (payload.b) {
+              setBranding({ ...DEFAULT_BRANDING, ...payload.b });
+              try {
+                await window.storage.set('branding', JSON.stringify(payload.b));
+              } catch (e) {}
+            }
+            
+            // Set user and enter share mode - no login needed!
+            setCurrentUser(payload.u);
+            setIsShareMode(true);
+            setLoading(false);
+            return;
+          }
+        } catch (decodeError) {
+          console.error('Failed to decode share data:', decodeError);
+          // Fall through to other methods
+        }
+      }
+
+      // Step 1.6: Check for legacy share token in URL (e.g., #share=Xy9k2Bn7Q4)
       const shareMatch = hash.match(/share=([a-zA-Z0-9]+)/);
       if (shareMatch) {
         const shareToken = shareMatch[1];
@@ -827,12 +885,29 @@ function ClientDashboard({ user, onLogout, branding }) {
 
   const getBusinessColor = () => 'bg-indigo-500';
 
-  // Stats
+  // Filter posts by current month (for timeline view only; calendar and gantt have their own navigation)
+  const monthFilteredPosts = posts.filter(post => {
+    if (viewMode !== 'timeline') return true; // Only filter in timeline view
+    if (!post.date) return false;
+    const postDate = new Date(post.date);
+    return postDate.getFullYear() === currentMonth.getFullYear() && 
+           postDate.getMonth() === currentMonth.getMonth();
+  });
+
+  // Stats (calculated on all posts, not just current month, so the totals reflect everything)
   const stats = {
     total: posts.length,
     pending: posts.filter(p => !p.clientApproval || p.clientApproval.status === 'pending').length,
     approved: posts.filter(p => p.clientApproval?.status === 'approved').length,
     rejected: posts.filter(p => p.clientApproval?.status === 'rejected').length
+  };
+
+  // Monthly stats (for the displayed month)
+  const monthlyStats = {
+    total: monthFilteredPosts.length,
+    pending: monthFilteredPosts.filter(p => !p.clientApproval || p.clientApproval.status === 'pending').length,
+    approved: monthFilteredPosts.filter(p => p.clientApproval?.status === 'approved').length,
+    rejected: monthFilteredPosts.filter(p => p.clientApproval?.status === 'rejected').length
   };
 
   const allReviewed = stats.pending === 0 && posts.length > 0;
@@ -946,7 +1021,54 @@ function ClientDashboard({ user, onLogout, branding }) {
             </div>
 
             {viewMode === 'timeline' && (
-              <ClientTimelineView posts={posts} onPostClick={setSelectedPost} />
+              <>
+                {/* Month Navigation */}
+                <div className="bg-white rounded-xl border border-slate-200 px-3 sm:px-4 py-2.5 sm:py-3 mb-4 flex items-center justify-between">
+                  <button
+                    onClick={() => {
+                      const newMonth = new Date(currentMonth);
+                      newMonth.setMonth(newMonth.getMonth() - 1);
+                      setCurrentMonth(newMonth);
+                    }}
+                    className="p-1.5 hover:bg-slate-100 rounded-lg transition flex items-center gap-1 text-sm text-slate-600"
+                    title="חודש קודם"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                    <span className="hidden sm:inline">הקודם</span>
+                  </button>
+                  
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <button
+                      onClick={() => setCurrentMonth(new Date())}
+                      className="text-xs px-2 py-1 text-slate-500 hover:bg-slate-100 rounded transition"
+                      title="חזור לחודש הנוכחי"
+                    >
+                      היום
+                    </button>
+                    <h3 className="font-semibold text-sm sm:text-base text-slate-900 min-w-[100px] sm:min-w-[140px] text-center">
+                      {currentMonth.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <span className="text-xs text-slate-500 hidden sm:inline">
+                      ({monthlyStats.total} פוסטים)
+                    </span>
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      const newMonth = new Date(currentMonth);
+                      newMonth.setMonth(newMonth.getMonth() + 1);
+                      setCurrentMonth(newMonth);
+                    }}
+                    className="p-1.5 hover:bg-slate-100 rounded-lg transition flex items-center gap-1 text-sm text-slate-600"
+                    title="חודש הבא"
+                  >
+                    <span className="hidden sm:inline">הבא</span>
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                <ClientTimelineView posts={monthFilteredPosts} onPostClick={setSelectedPost} />
+              </>
             )}
 
             {viewMode === 'calendar' && (
@@ -1071,7 +1193,20 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
       stripHtml(post.content).toLowerCase().includes(searchTerm.toLowerCase()) ||
       post.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (post.title && post.title.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesBusiness && matchesSearch;
+    
+    // Filter by current month - only show posts within the selected month
+    // (Timeline view only - calendar and gantt have their own month navigation)
+    let matchesMonth = true;
+    if (viewMode === 'timeline' && post.date) {
+      const postDate = new Date(post.date);
+      const postYear = postDate.getFullYear();
+      const postMonth = postDate.getMonth();
+      const viewYear = currentMonth.getFullYear();
+      const viewMonth = currentMonth.getMonth();
+      matchesMonth = postYear === viewYear && postMonth === viewMonth;
+    }
+    
+    return matchesBusiness && matchesSearch && matchesMonth;
   }).sort((a, b) => new Date(a.date + 'T' + (a.time || '00:00')) - new Date(b.date + 'T' + (b.time || '00:00')));
 
   const postsByDate = filteredPosts.reduce((acc, post) => {
@@ -1350,25 +1485,76 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
       ) : (
         <>
           {viewMode === 'timeline' && (
-            <div className="space-y-6">
-              {Object.keys(postsByDate).length === 0 ? (
-                <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">לא נמצאו פוסטים תואמים</div>
-              ) : (
-                Object.entries(postsByDate).map(([date, datePosts]) => (
-                  <div key={date} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-50 px-3 sm:px-5 py-2.5 sm:py-3 border-b border-slate-200 flex items-center justify-between">
-                      <h3 className="font-semibold text-slate-900 text-sm">{formatDateHebrew(date)}</h3>
-                      <span className="text-xs text-slate-500">{datePosts.length} פוסטים</span>
-                    </div>
-                    <div className="divide-y divide-slate-100">
-                      {datePosts.map(post => (
-                        <AdminPostRow key={post.id} post={post} onEdit={(p) => { setEditingPost(p); setShowPostModal(true); }} onDelete={handleDelete} onView={setSelectedPost} onDuplicate={handleDuplicate} businessColor={getBusinessColor(post.businessName)} />
-                      ))}
-                    </div>
+            <>
+              {/* Month Navigation for Timeline */}
+              <div className="bg-white rounded-xl border border-slate-200 px-3 sm:px-4 py-2.5 sm:py-3 mb-4 flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    const newMonth = new Date(currentMonth);
+                    newMonth.setMonth(newMonth.getMonth() - 1);
+                    setCurrentMonth(newMonth);
+                  }}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg transition flex items-center gap-1 text-sm text-slate-600"
+                  title="חודש קודם"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                  <span className="hidden sm:inline">הקודם</span>
+                </button>
+                
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    onClick={() => setCurrentMonth(new Date())}
+                    className="text-xs px-2 py-1 text-slate-500 hover:bg-slate-100 rounded transition"
+                    title="חזור לחודש הנוכחי"
+                  >
+                    היום
+                  </button>
+                  <h3 className="font-semibold text-sm sm:text-base text-slate-900 min-w-[100px] sm:min-w-[140px] text-center">
+                    {currentMonth.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+                  </h3>
+                  <span className="text-xs text-slate-500 hidden sm:inline">
+                    ({filteredPosts.length} פוסטים)
+                  </span>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    const newMonth = new Date(currentMonth);
+                    newMonth.setMonth(newMonth.getMonth() + 1);
+                    setCurrentMonth(newMonth);
+                  }}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg transition flex items-center gap-1 text-sm text-slate-600"
+                  title="חודש הבא"
+                >
+                  <span className="hidden sm:inline">הבא</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="space-y-6">
+                {Object.keys(postsByDate).length === 0 ? (
+                  <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+                    <Calendar className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                    <p className="font-medium mb-1">אין פוסטים בחודש זה</p>
+                    <p className="text-xs">השתמש בחיצים לעיל לדפדף בין חודשים</p>
                   </div>
-                ))
-              )}
-            </div>
+                ) : (
+                  Object.entries(postsByDate).map(([date, datePosts]) => (
+                    <div key={date} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="bg-slate-50 px-3 sm:px-5 py-2.5 sm:py-3 border-b border-slate-200 flex items-center justify-between">
+                        <h3 className="font-semibold text-slate-900 text-sm">{formatDateHebrew(date)}</h3>
+                        <span className="text-xs text-slate-500">{datePosts.length} פוסטים</span>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {datePosts.map(post => (
+                          <AdminPostRow key={post.id} post={post} onEdit={(p) => { setEditingPost(p); setShowPostModal(true); }} onDelete={handleDelete} onView={setSelectedPost} onDuplicate={handleDuplicate} businessColor={getBusinessColor(post.businessName)} />
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
           )}
 
           {viewMode === 'calendar' && (
@@ -2066,7 +2252,7 @@ function PublishDetailModal({ post, client, onClose, onPublished, onDelete }) {
 }
 
 // ============== USERS VIEW (ADMIN) ==============
-function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, editingUser, setEditingUser, getBusinessColor, filterRole = 'client', currentUser }) {
+function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, editingUser, setEditingUser, getBusinessColor, branding, filterRole = 'client', currentUser }) {
   const [shareModalUser, setShareModalUser] = useState(null);
 
   const handleDeleteUser = async (username) => {
@@ -2228,6 +2414,8 @@ function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, e
       {shareModalUser && (
         <ShareLinkModal
           user={shareModalUser}
+          posts={posts}
+          branding={branding}
           onClose={() => setShareModalUser(null)}
           onRegenerate={handleRegenerateToken}
         />
@@ -2457,22 +2645,74 @@ function UserModal({ user, existingUsernames, onSave, onClose, defaultRole = 'cl
 }
 
 // ============== SHARE LINK MODAL ==============
-function ShareLinkModal({ user, onClose, onRegenerate }) {
+function ShareLinkModal({ user, posts = [], branding = null, onClose, onRegenerate }) {
   const [copied, setCopied] = useState(false);
   
-  // Build the full URL
+  // Build the full URL with all data encoded - works on any device without server!
   const baseUrl = window.location.origin + window.location.pathname;
-  const shareUrl = `${baseUrl}#share=${user.shareToken}`;
-
-  const copyToClipboard = async () => {
+  
+  // Filter posts for this client only
+  const clientPosts = posts.filter(p => p.businessName === user.businessName);
+  
+  // Build minimal data payload - only what's needed for client view
+  const sharePayload = {
+    u: { // user
+      username: user.username,
+      name: user.name,
+      businessName: user.businessName,
+      email: user.email || '',
+      role: 'client',
+      logoData: user.logoData || null,
+      shareToken: user.shareToken,
+      package: user.package || null,
+    },
+    p: clientPosts, // posts
+    b: branding ? { // branding
+      companyName: branding.companyName,
+      tagline: branding.tagline,
+      logoData: branding.logoData,
+      primaryColor: branding.primaryColor,
+      secondaryColor: branding.secondaryColor,
+      loginWelcome: branding.loginWelcome,
+      theme: branding.theme,
+    } : null,
+    t: Date.now(), // timestamp
+  };
+  
+  // Encode to base64 (URL-safe)
+  const encodeData = (obj) => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      const json = JSON.stringify(obj);
+      // Use TextEncoder + btoa for UTF-8 safe encoding (Hebrew support)
+      const bytes = new TextEncoder().encode(json);
+      let binary = '';
+      bytes.forEach(b => binary += String.fromCharCode(b));
+      const b64 = btoa(binary);
+      // Make URL-safe
+      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    } catch (e) {
+      console.error('Encode failed:', e);
+      return '';
+    }
+  };
+  
+  const encodedData = encodeData(sharePayload);
+  
+  // Build the share URL with embedded data
+  const shareUrl = `${baseUrl}#data=${encodedData}`;
+  
+  // Also offer simple token URL for backwards compatibility
+  const tokenUrl = `${baseUrl}#share=${user.shareToken}`;
+
+  const copyToClipboard = async (url = shareUrl) => {
+    try {
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch (e) {
       // Fallback for older browsers
       const input = document.createElement('input');
-      input.value = shareUrl;
+      input.value = url;
       document.body.appendChild(input);
       input.select();
       document.execCommand('copy');
@@ -2517,13 +2757,17 @@ function ShareLinkModal({ user, onClose, onRegenerate }) {
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-start gap-2">
             <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-emerald-900">
-              <p className="font-semibold mb-0.5">לינק ייעודי ללקוח</p>
-              <p>הלקוח יכנס ישירות לדשבורד שלו ללא צורך בשם משתמש וסיסמה. הוא יוכל לצפות, לאשר ולהעיר על הפוסטים.</p>
+              <p className="font-semibold mb-0.5">לינק ייעודי ללקוח - עובד מכל מכשיר! 📱</p>
+              <p>הלינק מכיל את כל הפוסטים והפרטים מקודדים בתוכו. הלקוח יכנס מהמובייל ללא צורך בשם משתמש וסיסמה ויראה את הגאנט שלו מיד.</p>
+              <p className="mt-1 text-emerald-700">💡 כל פעם שמעדכן פוסטים, שלח לינק חדש (כדי שיהיו מעודכנים אצל הלקוח)</p>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">לינק הגאנט</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              לינק הגאנט 
+              <span className="text-xs text-slate-500 font-normal">({clientPosts.length} פוסטים מקודדים בלינק)</span>
+            </label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -2534,7 +2778,7 @@ function ShareLinkModal({ user, onClose, onRegenerate }) {
                 onFocus={(e) => e.target.select()}
               />
               <button
-                onClick={copyToClipboard}
+                onClick={() => copyToClipboard(shareUrl)}
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition flex items-center gap-2 ${
                   copied 
                     ? 'bg-emerald-600 text-white' 
@@ -2554,6 +2798,11 @@ function ShareLinkModal({ user, onClose, onRegenerate }) {
                 )}
               </button>
             </div>
+            {shareUrl.length > 8000 && (
+              <p className="mt-1.5 text-xs text-amber-600">
+                ⚠️ הלינק ארוך מאד ({Math.round(shareUrl.length / 1000)}KB) - חלק מהאפליקציות עלולות לחתוך אותו. מומלץ להשתמש ב-WhatsApp Web או דוא"ל.
+              </p>
+            )}
           </div>
 
           <div>
@@ -3085,6 +3334,16 @@ function ClientTimelineView({ posts, onPostClick }) {
   }, {});
 
   const sortedDates = Object.keys(postsByDate).sort();
+
+  if (sortedDates.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+        <Calendar className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+        <p className="font-medium mb-1">אין פוסטים בחודש זה</p>
+        <p className="text-xs">השתמש בחיצים לעיל לדפדף בין חודשים</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
