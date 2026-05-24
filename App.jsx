@@ -2,20 +2,150 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from 'lucide-react';
 
 // ============== VERSION INFO ==============
-// VERSION: v2.1.7 - 24/05/2026
-// CHANGE: Timeline view now filters by current month with navigation arrows
-// Console will log this on app start to verify correct version is running
+// VERSION: v2.3.0 - 24/05/2026
+// CHANGE: 🚀 NOW USING SUPABASE! All data syncs in real-time across all devices
+// No PHP/MySQL setup needed - Supabase handles everything in the cloud
 if (typeof window !== 'undefined') {
-  console.log('%c🎯 bidernet Content Calendar v2.1.7', 'color: #6366f1; font-size: 14px; font-weight: bold;');
-  console.log('%c✓ Monthly filtering with navigation (admin + client timeline)', 'color: #10b981;');
+  console.log('%c🎯 bidernet Content Calendar v2.3.0', 'color: #6366f1; font-size: 14px; font-weight: bold;');
+  console.log('%c✨ Powered by Supabase - cross-device sync enabled!', 'color: #10b981;');
+  console.log('%c💡 Test: apiPing() in console', 'color: #f59e0b;');
 }
 
 
-// ============== STORAGE SHIM ==============
-// Falls back to localStorage when running outside Claude.ai (where window.storage doesn't exist)
+// ============== STORAGE SHIM - SUPABASE-BACKED ==============
+// Maps the storage keys used throughout the app to Supabase REST API calls.
+// This way we don't have to rewrite 35 callsites - we just intercept them here.
+//
+// Storage keys → Supabase tables:
+//   'content-posts'   → posts table
+//   'users'           → users table
+//   'branding'        → branding table (single row, id=1)
+//   'team-chat'       → team_chat table
+//   'templates'       → templates table
+//   Anything else     → falls back to localStorage
+//
+// Supabase project configuration
+const SUPABASE_URL = 'https://vrgjhklfpoihigyffhki.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyZ2poa2xmcG9paGlneWZmaGtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MzczMzMsImV4cCI6MjA5NTIxMzMzM30.8RRQE7h5rjB3hsGeBpwsLGs3sxffrbVhEbaNVjPNPxY';
+
+// Maps app storage keys to Supabase table names
+const SB_TABLES = {
+  'content-posts': 'posts',
+  'users': 'users',
+  'branding': 'branding',
+  'team-chat': 'team_chat',
+  'templates': 'templates'
+};
+
+// Maps JavaScript camelCase fields to Postgres snake_case columns (for known fields)
+const FIELD_MAP_JS_TO_DB = {
+  // users
+  businessName: 'business_name',
+  logoData: 'logo_data',
+  shareToken: 'share_token',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  // posts
+  mediaUrl: 'media_url',
+  mediaType: 'media_type',
+  clientApproval: 'client_approval',
+  publishStatus: 'publish_status',
+  publishedAt: 'published_at',
+  chatMessages: 'chat_messages',
+  editHistory: 'edit_history',
+  createdBy: 'created_by',
+  // branding
+  companyName: 'company_name',
+  primaryColor: 'primary_color',
+  secondaryColor: 'secondary_color',
+  loginWelcome: 'login_welcome',
+  // team_chat
+  senderUsername: 'sender_username',
+  senderName: 'sender_name'
+};
+
+const FIELD_MAP_DB_TO_JS = Object.fromEntries(
+  Object.entries(FIELD_MAP_JS_TO_DB).map(([js, db]) => [db, js])
+);
+
+// Convert object keys from camelCase to snake_case (for sending to Supabase)
+function toDbRow(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const dbKey = FIELD_MAP_JS_TO_DB[k] || k;
+    // Skip 'package' - it maps to packageData/package_data
+    if (k === 'package') {
+      result['package_data'] = v;
+    } else {
+      result[dbKey] = v;
+    }
+  }
+  return result;
+}
+
+// Convert object keys from snake_case back to camelCase (for use in app)
+function fromDbRow(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === 'package_data') {
+      result['package'] = v;
+    } else {
+      const jsKey = FIELD_MAP_DB_TO_JS[k] || k;
+      result[jsKey] = v;
+    }
+  }
+  return result;
+}
+
+// Core Supabase REST fetch
+async function sbFetch(path, options = {}) {
+  const url = `${SUPABASE_URL}/rest/v1/${path}`;
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation',
+    ...options.headers
+  };
+  const init = {
+    method: options.method || 'GET',
+    headers
+  };
+  if (options.body !== undefined) init.body = JSON.stringify(options.body);
+  
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase ${path} failed (${res.status}): ${text}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
 if (typeof window !== 'undefined' && !window.storage) {
   window.storage = {
     get: async (key) => {
+      const table = SB_TABLES[key];
+      if (table) {
+        try {
+          let data;
+          if (table === 'branding') {
+            // Single row
+            const rows = await sbFetch(`branding?id=eq.1&select=*`);
+            data = rows && rows[0] ? fromDbRow(rows[0]) : {};
+          } else {
+            const rows = await sbFetch(`${table}?select=*&order=created_at.desc`);
+            data = (rows || []).map(fromDbRow);
+          }
+          return { value: JSON.stringify(data) };
+        } catch (e) {
+          console.warn(`Supabase get '${key}' failed:`, e.message);
+          // Fall through to localStorage
+        }
+      }
+      // localStorage fallback
       try {
         const value = localStorage.getItem(key);
         if (value === null) throw new Error('not found');
@@ -24,21 +154,110 @@ if (typeof window !== 'undefined' && !window.storage) {
         throw e;
       }
     },
+    
     set: async (key, value) => {
-      localStorage.setItem(key, value);
-      return { value };
+      const table = SB_TABLES[key];
+      if (table) {
+        try {
+          const parsed = JSON.parse(value);
+          
+          if (key === 'branding') {
+            // Upsert single row with id=1
+            const row = toDbRow({ ...parsed, id: 1 });
+            await sbFetch('branding', {
+              method: 'POST',
+              headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
+              body: row
+            });
+          } else if (Array.isArray(parsed)) {
+            // For arrays: get current IDs, compute diff, delete missing, upsert all
+            let existingIds = new Set();
+            try {
+              const existing = await sbFetch(`${table}?select=id`);
+              existingIds = new Set((existing || []).map(r => r.id));
+            } catch (e) { /* first save */ }
+            
+            const newIds = new Set(parsed.map(item => item.id).filter(Boolean));
+            
+            // Delete items no longer present
+            for (const oldId of existingIds) {
+              if (!newIds.has(oldId)) {
+                try {
+                  await sbFetch(`${table}?id=eq.${encodeURIComponent(oldId)}`, { method: 'DELETE' });
+                } catch (e) { console.warn('Delete failed:', e.message); }
+              }
+            }
+            
+            // Upsert all
+            if (parsed.length > 0) {
+              const rows = parsed.map(toDbRow);
+              await sbFetch(table, {
+                method: 'POST',
+                headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+                body: rows
+              });
+            }
+          }
+          return { value };
+        } catch (e) {
+          console.warn(`Supabase set '${key}' failed:`, e.message);
+        }
+      }
+      // localStorage fallback
+      try {
+        localStorage.setItem(key, value);
+        return { value };
+      } catch (e) {
+        return null;
+      }
     },
+    
     delete: async (key) => {
-      localStorage.removeItem(key);
-      return { deleted: true };
+      try {
+        localStorage.removeItem(key);
+        return { deleted: true };
+      } catch (e) {
+        return null;
+      }
     },
+    
     list: async (prefix) => {
       const keys = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!prefix || k.startsWith(prefix)) keys.push(k);
-      }
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!prefix || k.startsWith(prefix)) keys.push(k);
+        }
+      } catch (e) {}
       return { keys };
+    }
+  };
+  
+  // Helper for login via Supabase
+  window.apiLogin = async (username, password) => {
+    const rows = await sbFetch(`users?username=eq.${encodeURIComponent(username)}&password=eq.${encodeURIComponent(password)}&limit=1`);
+    if (!rows || rows.length === 0) {
+      throw new Error('שם משתמש או סיסמה שגויים');
+    }
+    return fromDbRow(rows[0]);
+  };
+  
+  // Helper for share link lookup
+  window.apiShareLookup = async (token) => {
+    const rows = await sbFetch(`users?share_token=eq.${encodeURIComponent(token)}&role=eq.client&limit=1`);
+    if (!rows || rows.length === 0) {
+      throw new Error('הקישור אינו תקף');
+    }
+    return fromDbRow(rows[0]);
+  };
+  
+  // Test connection
+  window.apiPing = async () => {
+    try {
+      const rows = await sbFetch('branding?id=eq.1&select=id');
+      return { ok: true, message: 'pong', backend: 'supabase', time: new Date().toISOString() };
+    } catch (e) {
+      return { ok: false, error: e.message };
     }
   };
 }
@@ -316,19 +535,34 @@ function LoginScreen({ onLogin, branding }) {
 
     setLoading(true);
     try {
-      let users = [];
-      try {
-        const usersResult = await window.storage.get('users');
-        if (usersResult && usersResult.value) {
-          users = JSON.parse(usersResult.value);
+      let user = null;
+      
+      // Try API login first (faster, more secure)
+      if (typeof window !== 'undefined' && window.apiLogin) {
+        try {
+          user = await window.apiLogin(username, password);
+        } catch (apiError) {
+          // API not available or auth failed - fall back to local lookup
+          console.warn('API login failed, trying local:', apiError.message);
         }
-      } catch (e) {
-        users = [];
       }
       
-      const user = users.find(u => 
-        u.username.toLowerCase() === username.toLowerCase() && u.password === password
-      );
+      // Fallback: get users list and match locally
+      if (!user) {
+        let users = [];
+        try {
+          const usersResult = await window.storage.get('users');
+          if (usersResult && usersResult.value) {
+            users = JSON.parse(usersResult.value);
+          }
+        } catch (e) {
+          users = [];
+        }
+        
+        user = users.find(u => 
+          u.username.toLowerCase() === username.toLowerCase() && u.password === password
+        );
+      }
 
       if (user) {
         await onLogin(user);
