@@ -1,100 +1,125 @@
-# bidernet Content Calendar v2.3.3-php
+# 📦 bidernet v2.3.3-php - חבילת התקנה מלאה
 
-מערכת לוח שנה לתוכן עבור bidernet group - גרסת PHP/MySQL לשרתי ClickPress/cPanel.
+חבילה מלאה לתיקייה `/public_html/app.bidernet.co.il/` בשרת ClickPress.
 
-## 🆕 מה חדש ב-v2.3.3-php (לעומת v2.2.0)
+---
 
-כל השיפורים שעשינו ב-v2.3.2 (Supabase) הועברו לגרסת PHP:
+## 📂 הקבצים בחבילה
 
-### תיקוני באגים:
-- ✅ תיקון תצוגת תמונות וסרטונים (mediaData/mediaName)
-- ✅ תיקון התנגשות לוגו במובייל (mobile-responsive header)
-- ✅ לוגו בכותרת הפך לכפתור חזרה לראשי
-- ✅ מיפוי שדות מלא: chat_messages↔messages, edit_history↔history
+| קובץ | תיאור | פעולה |
+|---|---|---|
+| `index.html` | דף האתר | העלה לשרת |
+| `app.js` | קוד האפליקציה (459KB compiled) | העלה לשרת |
+| `api.php` | Backend API | העלה לשרת |
+| `config.php` | הגדרות DB | **ערוך** ואז העלה |
+| `schema.sql` | יצירת טבלאות | **הרץ** ב-phpMyAdmin |
 
-### פיצ'רים חדשים:
-- ✅ לינקי שיתוף קצרים (#share=TOKEN במקום payload ארוך)
-- ✅ סנכרון אישורי גנט (gantt_approvals) דרך השרת
-- ✅ מיפוי קטגוריות, חבילה (package_size, package_period)
-- ✅ פרסום מרובה פלטפורמות (published_to)
-- ✅ תאריך עריכה צ'אט צוות (edited_at)
+---
 
-## ⚠️ דרישות שדרוג ב-MySQL
+## 🚀 שלבי התקנה (בסדר!)
 
-הגרסה הזו מצפה שטבלאות MySQL יכילו עמודות חדשות. הרץ את הסקריפט הבא:
+### שלב 1: קבלת פרטי DB מחברת השרתים
 
-```sql
--- עדכון טבלת users
-ALTER TABLE users ADD COLUMN IF NOT EXISTS package_size VARCHAR(50);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS package_period VARCHAR(50);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS logo_name VARCHAR(255);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS share_token VARCHAR(64);
-CREATE INDEX IF NOT EXISTS idx_users_share_token ON users(share_token);
+חברת השרתים שלחה לך:
+- שם מסד הנתונים (כמו `biderne1_bidernet`)
+- שם משתמש DB (כמו `biderne1_admin`)
+- סיסמת DB
 
--- עדכון טבלת posts
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_data LONGTEXT;
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_name VARCHAR(255);
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS category VARCHAR(100);
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS published_to JSON;
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS published_at DATETIME;
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS publish_status VARCHAR(50);
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS chat_messages JSON;
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS edit_history JSON;
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS client_approval JSON;
+### שלב 2: עריכת config.php
 
--- עדכון טבלת team_chat
-ALTER TABLE team_chat ADD COLUMN IF NOT EXISTS edited_at DATETIME;
+פתח את `config.php` בעורך טקסט (Notepad, VSCode וכו') והחלף 3 שורות:
 
--- טבלה חדשה: gantt_approvals
-CREATE TABLE IF NOT EXISTS gantt_approvals (
-  business_name VARCHAR(255) PRIMARY KEY,
-  status VARCHAR(50),
-  comment TEXT,
-  approved_at DATETIME,
-  approved_by VARCHAR(255),
-  post_count INT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+```php
+$DB_NAME = 'biderne1_bidernet';     // ← הכנס את שם ה-DB שקיבלת
+$DB_USER = 'biderne1_admin';        // ← הכנס את שם המשתמש שקיבלת
+$DB_PASS = 'YOUR_PASSWORD_HERE';    // ← הכנס את הסיסמה שקיבלת
 ```
 
-## ⚠️ דרישות שדרוג ב-api.php
+**שמור את הקובץ.**
 
-ה-api.php צריך לתמוך בפעולות הבאות:
+### שלב 3: העלאה ל-cPanel
 
-### פעולות חדשות נדרשות:
-- `?action=gantt_approvals` - GET/POST/DELETE
-- `?action=share&token=XXX` - GET (חיפוש משתמש לפי share_token)
-- `?action=ping` - GET (כבר קיים)
+1. כנס ל-**cPanel → File Manager**
+2. נווט ל-`/public_html/app.bidernet.co.il/`
+3. **מחק** את הקבצים הישנים (index.html, assets/ וכו')
+4. העלה את **כל 5 הקבצים** האלה לאותה תיקייה:
+   - `index.html`
+   - `app.js`
+   - `api.php`
+   - `config.php` (אחרי שערכת אותו!)
+   - `schema.sql`
 
-### פעולות קיימות שדורשות תמיכה בשדות חדשים:
-- `?action=posts` - יקבל ויחזיר media_data, media_name, category, published_to, chat_messages, edit_history וכו'
-- `?action=users` - יקבל ויחזיר package_size, package_period, logo_name, share_token
-- `?action=team_chat` - יקבל ויחזיר edited_at
+### שלב 4: יצירת הטבלאות ב-phpMyAdmin
 
-## 🚀 התקנה ב-ClickPress / cPanel
+1. ב-cPanel → **phpMyAdmin**
+2. בעמודה שמאל, בחר את ה-DB שלך (`biderne1_bidernet`)
+3. למעלה לחץ על **SQL**
+4. פתח את `schema.sql` בעורך טקסט, **העתק את כל התוכן**
+5. **הדבק** ב-SQL ב-phpMyAdmin
+6. לחץ **Go** / **בצע**
 
-1. **בנה את הפרויקט:**
-   ```bash
-   npm install
-   npm run build
+אמור להופיע ✅ עם הודעה שכל הטבלאות נוצרו.
+
+### שלב 5: בדיקה
+
+1. פתח `https://app.bidernet.co.il/` בדפדפן
+2. רענון חזק: **Ctrl+Shift+R**
+3. F12 → **Console** - אמור לראות:
+   ```
+   🎯 bidernet Content Calendar v2.3.3-php
+   ✨ Server-backed via /api.php (MySQL on ClickPress)
+   ```
+4. הרץ ב-Console: `apiPing()` - אמור לחזור:
+   ```json
+   {ok: true, message: "pong", db: "connected", version: "v2.3.3-php"}
    ```
 
-2. **העלה את התיקייה `dist/` ל-public_html של השרת**
+---
 
-3. **ודא ש-api.php קיים בשרת ותומך בכל הפעולות לעיל**
+## 🔑 התחברות ראשונה
 
-4. **הרץ את ה-SQL לעדכון מסד הנתונים**
-
-5. **בדוק שהכל עובד:**
-   - פתח את האתר → F12 → Console
-   - אמור לראות: `🎯 bidernet Content Calendar v2.3.3-php`
-   - הרץ `apiPing()` → אמור לחזור `{ok: true, ...}`
-
-## 🔑 משתמש ברירת מחדל
 - שם משתמש: `admin`
 - סיסמה: `admin123`
-- **חשוב להחליף מיד אחרי התקנה!**
 
-## 📞 תמיכה
-לבעיות פנה לחברת השרתים לוודא ש-api.php עודכן לכל הפיצ'רים החדשים.
+⚠️ **החלף את הסיסמה מיד אחרי ההתחברות הראשונה!**
+
+---
+
+## 🆘 פתרון בעיות
+
+### "Database connection failed"
+- ✅ ודא שערכת נכון את `config.php`
+- ✅ ודא שיש לך **לעשות** את הסיסמה (case-sensitive!)
+- ✅ ודא שהמשתמש קיבל **ALL PRIVILEGES** על ה-DB
+
+### "Missing config.php"
+- העלית את `config.php` לאותה תיקייה כמו `api.php`?
+
+### "Unknown action"
+- העלית את ה-`api.php` החדש (v2.3.3)? היקפים את הקובץ.
+
+### Console מציג שגיאות "Supabase"
+- שלא העלית גרסה ישנה? ודא שזה `app.js` החדש.
+- רענון חזק: Ctrl+Shift+R
+
+### תמונות לא נשמרות
+- ודא שהרצת את `schema.sql` המלא (יש עמודה `mediaData`)
+- בדוק ב-phpMyAdmin שהעמודה קיימת בטבלת `posts`
+- בדוק שהשרת מאפשר גודל קבצים גדול (php.ini → `upload_max_filesize` = `10M`)
+
+---
+
+## 🎯 מה כלול בגרסה v2.3.3-php
+
+- ✅ Backend ב-PHP/MySQL טהור (בלי Supabase!)
+- ✅ אימות עם סיסמאות
+- ✅ ניהול לקוחות ועסקים
+- ✅ העלאת תמונות וסרטונים
+- ✅ צ'אט פנים-פוסט עם היסטוריה
+- ✅ צ'אט צוות פנימי
+- ✅ אישורי גנט (gantt approvals)
+- ✅ לינקי שיתוף קצרים
+- ✅ ניהול חבילה ומדיה
+- ✅ קטגוריות פוסטים
+- ✅ מובייל-responsive
+- ✅ branding מלא
