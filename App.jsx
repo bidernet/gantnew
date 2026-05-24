@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from 'lucide-react';
 
 // ============== VERSION INFO ==============
-// VERSION: v2.1.4 - 24/05/2026
-// CHANGE: Updated default logo to bidernet group transparent/clean version
+// VERSION: v2.1.5 - 24/05/2026
+// CHANGE: Added Branding Settings modal accessible from admin header
 // Console will log this on app start to verify correct version is running
 if (typeof window !== 'undefined') {
-  console.log('%c🎯 bidernet Content Calendar v2.1.4', 'color: #6366f1; font-size: 14px; font-weight: bold;');
-  console.log('%c✓ New default logo (bidernet group clean version)', 'color: #10b981;');
+  console.log('%c🎯 bidernet Content Calendar v2.1.5', 'color: #6366f1; font-size: 14px; font-weight: bold;');
+  console.log('%c✓ Branding Settings modal added to admin header', 'color: #10b981;');
 }
 
 
@@ -401,6 +401,7 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPost, setSelectedPost] = useState(null);
+  const [showBrandingModal, setShowBrandingModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -609,6 +610,14 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
                 </button>
               )}
               <button
+                onClick={() => setShowBrandingModal(true)}
+                className="px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2"
+                title="הגדרות מיתוג"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">מיתוג</span>
+              </button>
+              <button
                 onClick={onLogout}
                 className="px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2"
                 title="יציאה"
@@ -693,6 +702,30 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
         )}
 
       </div>
+
+      {/* Branding Settings Modal */}
+      {showBrandingModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4" onClick={() => setShowBrandingModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} dir="rtl">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+              <h2 className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                הגדרות מיתוג
+              </h2>
+              <button
+                onClick={() => setShowBrandingModal(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition"
+                title="סגור"
+              >
+                <X className="w-5 h-5 text-slate-600" />
+              </button>
+            </div>
+            <div className="p-4 sm:p-6">
+              <BrandingSettings branding={branding} updateBranding={updateBranding} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
