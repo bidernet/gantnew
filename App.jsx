@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from 'lucide-react';
 
 // ============== VERSION INFO ==============
-// VERSION: v2.1.2 - 24/05/2026
-// FIX: SmartDatePicker filters by current business + Logo white background
+// VERSION: v2.1.3 - 24/05/2026
+// CHANGE: Removed category selector from post modal
 // Console will log this on app start to verify correct version is running
 if (typeof window !== 'undefined') {
-  console.log('%c🎯 bidernet Content Calendar v2.1.2', 'color: #6366f1; font-size: 14px; font-weight: bold;');
-  console.log('%c✓ Date picker fix + Logo background fix loaded', 'color: #10b981;');
+  console.log('%c🎯 bidernet Content Calendar v2.1.3', 'color: #6366f1; font-size: 14px; font-weight: bold;');
+  console.log('%c✓ Category removed from post modal', 'color: #10b981;');
 }
 
 
@@ -2804,28 +2804,6 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
                   </button>
                 );
               })}
-            </div>
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">קטגוריה</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {Object.entries(POST_CATEGORIES).map(([key, cat]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, category: key })}
-                  className={`py-2 px-2 text-xs rounded-lg border transition flex items-center justify-center gap-1.5 ${
-                    formData.category === key
-                      ? `${cat.bg} ${cat.text} ${cat.border} font-medium`
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>{cat.icon}</span>
-                  <span>{cat.label}</span>
-                </button>
-              ))}
             </div>
           </div>
 
