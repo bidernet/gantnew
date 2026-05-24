@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from 'lucide-react';
 
+// ============== VERSION INFO ==============
+// VERSION: v2.1.2 - 24/05/2026
+// FIX: SmartDatePicker filters by current business + Logo white background
+// Console will log this on app start to verify correct version is running
+if (typeof window !== 'undefined') {
+  console.log('%c🎯 bidernet Content Calendar v2.1.2', 'color: #6366f1; font-size: 14px; font-weight: bold;');
+  console.log('%c✓ Date picker fix + Logo background fix loaded', 'color: #10b981;');
+}
+
+
 // ============== STORAGE SHIM ==============
 // Falls back to localStorage when running outside Claude.ai (where window.storage doesn't exist)
 if (typeof window !== 'undefined' && !window.storage) {
@@ -285,11 +295,13 @@ function LoginScreen({ onLogin, branding }) {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           {branding.logoData ? (
-            <img 
-              src={branding.logoData} 
-              alt={branding.companyName} 
-              className="h-16 sm:h-20 w-auto object-contain mx-auto mb-6"
-            />
+            <div className="inline-block bg-white rounded-2xl p-4 mb-6 shadow-sm">
+              <img 
+                src={branding.logoData} 
+                alt={branding.companyName} 
+                className="h-16 sm:h-20 w-auto object-contain"
+              />
+            </div>
           ) : (
             <>
               <div 
@@ -463,11 +475,13 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
             <div className="flex items-center gap-3 sm:gap-6 min-w-0">
               <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                 {branding.logoData ? (
-                  <img 
-                    src={branding.logoData} 
-                    alt={branding.companyName} 
-                    className="h-10 sm:h-12 w-auto object-contain flex-shrink-0"
-                  />
+                  <div className="bg-white rounded-lg p-2 flex-shrink-0">
+                    <img 
+                      src={branding.logoData} 
+                      alt={branding.companyName} 
+                      className="h-8 sm:h-10 w-auto object-contain"
+                    />
+                  </div>
                 ) : (
                   <div 
                     className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -5606,10 +5620,10 @@ function SmartDatePicker({ value, onChange, allPosts, currentPostId, businessNam
   };
 
   // Group posts by date - exclude current post being edited
-  // ONLY show posts of the current business (so admin doesn't see other clients' posts)
-  const postsByDate = allPosts
+  // ALWAYS filter by business - if no business selected, show nothing (avoid leaking other clients' posts)
+  const postsByDate = !businessName ? {} : allPosts
     .filter(p => p.id !== currentPostId)
-    .filter(p => !businessName || p.businessName === businessName)
+    .filter(p => p.businessName === businessName)
     .reduce((acc, post) => {
       if (!acc[post.date]) acc[post.date] = [];
       acc[post.date].push(post);
