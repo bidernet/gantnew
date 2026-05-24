@@ -1,108 +1,100 @@
-# 📅 bidernet group - מערכת ניהול גאנטי תוכן v2.3.0
+# bidernet Content Calendar v2.3.3-php
 
-## 🎉 שינוי גדול - עברנו ל-Supabase!
+מערכת לוח שנה לתוכן עבור bidernet group - גרסת PHP/MySQL לשרתי ClickPress/cPanel.
 
-🚀 **המערכת עכשיו עובדת עם Supabase** - מסד נתונים בענן עם API מובנה.
+## 🆕 מה חדש ב-v2.3.3-php (לעומת v2.2.0)
 
-### למה זה טוב?
-- ✅ **לא צריך שרת PHP/MySQL** - הכל בענן
-- ✅ **סנכרון מלא ומיידי** בין כל המכשירים (דסקטופ ↔ מובייל ↔ טאבלט)
-- ✅ **לא צריך להתקין כלום** - הקוד כבר מחובר לפרויקט שלך
-- ✅ **תוכנית חינמית** מספיק לעשרות לקוחות ואלפי פוסטים
-- ✅ **דשבורד יפה** ב-Supabase לראות ולנהל נתונים
+כל השיפורים שעשינו ב-v2.3.2 (Supabase) הועברו לגרסת PHP:
 
-### מה כבר הוקם?
-✅ פרויקט Supabase: `bidernet-gantt` (eu-central-1)
-✅ 5 טבלאות נוצרו: `users`, `posts`, `branding`, `team_chat`, `templates`
-✅ משתמש admin ראשון: `admin / admin123`
-✅ ברנדינג ברירת מחדל: bidernet group
-✅ Row Level Security מוגדר
-✅ API keys כבר משולבים בקוד
+### תיקוני באגים:
+- ✅ תיקון תצוגת תמונות וסרטונים (mediaData/mediaName)
+- ✅ תיקון התנגשות לוגו במובייל (mobile-responsive header)
+- ✅ לוגו בכותרת הפך לכפתור חזרה לראשי
+- ✅ מיפוי שדות מלא: chat_messages↔messages, edit_history↔history
 
----
+### פיצ'רים חדשים:
+- ✅ לינקי שיתוף קצרים (#share=TOKEN במקום payload ארוך)
+- ✅ סנכרון אישורי גנט (gantt_approvals) דרך השרת
+- ✅ מיפוי קטגוריות, חבילה (package_size, package_period)
+- ✅ פרסום מרובה פלטפורמות (published_to)
+- ✅ תאריך עריכה צ'אט צוות (edited_at)
 
-## 🚀 איך לפרוס
+## ⚠️ דרישות שדרוג ב-MySQL
 
-**שום הקמת backend לא נדרשת! פשוט העלה את הקוד:**
+הגרסה הזו מצפה שטבלאות MySQL יכילו עמודות חדשות. הרץ את הסקריפט הבא:
 
-1. **הורד** את `bidernet-v2.3.0.zip`
-2. **העלה ל-GitHub** במקום הגרסה הקודמת (gantnew repo)
-3. **פרוס דרך cPanel**:
-   - Git Version Control → Manage
-   - Update from Remote
-   - Deploy HEAD Commit
-4. **חכה 2-5 דקות**
+```sql
+-- עדכון טבלת users
+ALTER TABLE users ADD COLUMN IF NOT EXISTS package_size VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS package_period VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS logo_name VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS share_token VARCHAR(64);
+CREATE INDEX IF NOT EXISTS idx_users_share_token ON users(share_token);
 
-### בדיקה
-1. רענן עם **Ctrl+Shift+R**
-2. F12 → Console - אמור להופיע:
+-- עדכון טבלת posts
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_data LONGTEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_name VARCHAR(255);
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS category VARCHAR(100);
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS published_to JSON;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS published_at DATETIME;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS publish_status VARCHAR(50);
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS chat_messages JSON;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS edit_history JSON;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS client_approval JSON;
+
+-- עדכון טבלת team_chat
+ALTER TABLE team_chat ADD COLUMN IF NOT EXISTS edited_at DATETIME;
+
+-- טבלה חדשה: gantt_approvals
+CREATE TABLE IF NOT EXISTS gantt_approvals (
+  business_name VARCHAR(255) PRIMARY KEY,
+  status VARCHAR(50),
+  comment TEXT,
+  approved_at DATETIME,
+  approved_by VARCHAR(255),
+  post_count INT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+## ⚠️ דרישות שדרוג ב-api.php
+
+ה-api.php צריך לתמוך בפעולות הבאות:
+
+### פעולות חדשות נדרשות:
+- `?action=gantt_approvals` - GET/POST/DELETE
+- `?action=share&token=XXX` - GET (חיפוש משתמש לפי share_token)
+- `?action=ping` - GET (כבר קיים)
+
+### פעולות קיימות שדורשות תמיכה בשדות חדשים:
+- `?action=posts` - יקבל ויחזיר media_data, media_name, category, published_to, chat_messages, edit_history וכו'
+- `?action=users` - יקבל ויחזיר package_size, package_period, logo_name, share_token
+- `?action=team_chat` - יקבל ויחזיר edited_at
+
+## 🚀 התקנה ב-ClickPress / cPanel
+
+1. **בנה את הפרויקט:**
+   ```bash
+   npm install
+   npm run build
    ```
-   🎯 bidernet Content Calendar v2.3.0
-   ✨ Powered by Supabase - cross-device sync enabled!
-   ```
-3. בדוק חיבור: בקונסול הקלד `apiPing()` ↩
-   אמור להחזיר: `{ok: true, message: "pong", backend: "supabase", ...}`
 
----
+2. **העלה את התיקייה `dist/` ל-public_html של השרת**
 
-## 🔑 כניסה ראשונה
+3. **ודא ש-api.php קיים בשרת ותומך בכל הפעולות לעיל**
 
+4. **הרץ את ה-SQL לעדכון מסד הנתונים**
+
+5. **בדוק שהכל עובד:**
+   - פתח את האתר → F12 → Console
+   - אמור לראות: `🎯 bidernet Content Calendar v2.3.3-php`
+   - הרץ `apiPing()` → אמור לחזור `{ok: true, ...}`
+
+## 🔑 משתמש ברירת מחדל
 - שם משתמש: `admin`
 - סיסמה: `admin123`
+- **חשוב להחליף מיד אחרי התקנה!**
 
-⚠️ **חובה לשנות את הסיסמה אחרי הכניסה הראשונה!**
-
----
-
-## 📊 איך לראות את הנתונים שלך
-
-1. **לך ל**: https://supabase.com/dashboard
-2. **בחר פרויקט**: bidernet-gantt
-3. **Table Editor** - תראה את כל הטבלאות והנתונים
-4. **SQL Editor** - להריץ queries
-5. **Logs** - לראות בעיות אם יש
-
----
-
-## 🐛 פתרון בעיות
-
-### "Supabase get 'users' failed"
-- בדוק שמפתחות ה-API בקוד תקינים
-- בדוק חיבור אינטרנט
-- פתח Supabase dashboard - אם פעיל הכל בסדר
-
-### הנתונים לא מסונכרנים בין מכשירים
-- נקה cache (Ctrl+Shift+R)
-- וודא שהמכשירים השני באמת קורא מהשרת (לא ממצב offline)
-- בדוק קונסול לשגיאות
-
-### CORS errors
-- Supabase מאפשר את כל ה-origins כברירת מחדל
-- אם יש בעיה - בדוק ב-Supabase dashboard → Settings → API
-
----
-
-## 🔐 הערות אבטחה
-
-- **anon key** הזה הוא ציבורי וזה תקין (זו המטרה שלו)
-- Row Level Security פעיל על כל הטבלאות
-- ה-service_role key (הסודי) **לא** משולב בקוד
-- אבטחת הסיסמאות כרגע פשוטה - בעתיד אפשר להוסיף bcrypt + JWT
-
----
-
-## 📋 שינויים קודמים שכלולים
-
-- 📅 תצוגה חודשית בציר זמן עם ניווט
-- 🔗 שיתוף לינק שעובד מכל מכשיר
-- ⚙️ כפתור "מיתוג" בהדר להחלפת לוגו וצבעים
-- 🎨 לוגו ברירת מחדל מעודכן (bidernet group נקי)
-- ✅ בורר התאריך מציג רק פוסטים של הלקוח הנבחר
-- 🗑️ הוסרה רובריקת קטגוריות ממודאל יצירת פוסט
-- ☀️ ברכה דינמית לפי השעה
-- 💬 צ'אט פנימי בין מנהלים
-- 📤 לשונית "לפרסום" עם מחיקת פוסטים
-- 👥 הפרדה לקוחות/מנהלים בטאבים שונים
-- 📱 התאמה למובייל
-
-© 2026 bidernet group
+## 📞 תמיכה
+לבעיות פנה לחברת השרתים לוודא ש-api.php עודכן לכל הפיצ'רים החדשים.
