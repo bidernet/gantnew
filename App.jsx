@@ -2,12 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from 'lucide-react';
 
 // ============== VERSION INFO ==============
-// VERSION: v2.3.0 - 24/05/2026
-// CHANGE: 🚀 NOW USING SUPABASE! All data syncs in real-time across all devices
-// No PHP/MySQL setup needed - Supabase handles everything in the cloud
+// VERSION: v2.3.2 - 24/05/2026
+// MAJOR REVIEW: Complete audit & fix of all DB sync issues
+// - Full field mapping (messages, history, package, category, etc.)
+// - gantt-approvals now syncs to Supabase
+// - team-chat properly maps timestamp ↔ created_at
+// - Added missing DB columns: media_data, media_name, package_size, package_period,
+//   logo_name, category, published_to, edited_at (team_chat)
 if (typeof window !== 'undefined') {
-  console.log('%c🎯 bidernet Content Calendar v2.3.0', 'color: #6366f1; font-size: 14px; font-weight: bold;');
-  console.log('%c✨ Powered by Supabase - cross-device sync enabled!', 'color: #10b981;');
+  console.log('%c🎯 bidernet Content Calendar v2.3.2', 'color: #6366f1; font-size: 14px; font-weight: bold;');
+  console.log('%c✨ Fully synced with Supabase - all data persists across devices', 'color: #10b981;');
   console.log('%c💡 Test: apiPing() in console', 'color: #f59e0b;');
 }
 
@@ -34,7 +38,8 @@ const SB_TABLES = {
   'users': 'users',
   'branding': 'branding',
   'team-chat': 'team_chat',
-  'templates': 'templates'
+  'templates': 'templates',
+  'gantt-approvals': 'gantt_approvals'
 };
 
 // Maps JavaScript camelCase fields to Postgres snake_case columns (for known fields)
@@ -42,17 +47,25 @@ const FIELD_MAP_JS_TO_DB = {
   // users
   businessName: 'business_name',
   logoData: 'logo_data',
+  logoName: 'logo_name',
   shareToken: 'share_token',
+  packageSize: 'package_size',
+  packagePeriod: 'package_period',
   createdAt: 'created_at',
   updatedAt: 'updated_at',
   // posts
   mediaUrl: 'media_url',
   mediaType: 'media_type',
+  mediaData: 'media_data',
+  mediaName: 'media_name',
   clientApproval: 'client_approval',
   publishStatus: 'publish_status',
   publishedAt: 'published_at',
+  publishedTo: 'published_to',
   chatMessages: 'chat_messages',
   editHistory: 'edit_history',
+  messages: 'chat_messages',
+  history: 'edit_history',
   createdBy: 'created_by',
   // branding
   companyName: 'company_name',
@@ -61,12 +74,52 @@ const FIELD_MAP_JS_TO_DB = {
   loginWelcome: 'login_welcome',
   // team_chat
   senderUsername: 'sender_username',
-  senderName: 'sender_name'
+  senderName: 'sender_name',
+  authorUsername: 'sender_username',
+  author: 'sender_name',
+  text: 'message',
+  editedAt: 'edited_at',
+  // gantt_approvals
+  businessName: 'business_name',
+  approvedAt: 'approved_at',
+  approvedBy: 'approved_by',
+  postCount: 'post_count'
 };
 
-const FIELD_MAP_DB_TO_JS = Object.fromEntries(
-  Object.entries(FIELD_MAP_JS_TO_DB).map(([js, db]) => [db, js])
-);
+// Canonical DB→JS map: when reading from Supabase, use these JS names.
+// Note: posts use 'messages'/'history' as the canonical names in the React code.
+const FIELD_MAP_DB_TO_JS = {
+  business_name: 'businessName',
+  logo_data: 'logoData',
+  logo_name: 'logoName',
+  share_token: 'shareToken',
+  package_size: 'packageSize',
+  package_period: 'packagePeriod',
+  created_at: 'createdAt',
+  updated_at: 'updatedAt',
+  media_url: 'mediaUrl',
+  media_type: 'mediaType',
+  media_data: 'mediaData',
+  media_name: 'mediaName',
+  client_approval: 'clientApproval',
+  publish_status: 'publishStatus',
+  published_at: 'publishedAt',
+  published_to: 'publishedTo',
+  chat_messages: 'messages',
+  edit_history: 'history',
+  created_by: 'createdBy',
+  company_name: 'companyName',
+  primary_color: 'primaryColor',
+  secondary_color: 'secondaryColor',
+  login_welcome: 'loginWelcome',
+  sender_username: 'authorUsername',
+  sender_name: 'author',
+  message: 'text',
+  edited_at: 'editedAt',
+  approved_at: 'approvedAt',
+  approved_by: 'approvedBy',
+  post_count: 'postCount'
+};
 
 // Convert object keys from camelCase to snake_case (for sending to Supabase)
 function toDbRow(obj) {
@@ -135,6 +188,27 @@ if (typeof window !== 'undefined' && !window.storage) {
             // Single row
             const rows = await sbFetch(`branding?id=eq.1&select=*`);
             data = rows && rows[0] ? fromDbRow(rows[0]) : {};
+          } else if (key === 'gantt-approvals') {
+            // Dictionary object keyed by business_name
+            const rows = await sbFetch(`${table}?select=*`);
+            data = {};
+            (rows || []).forEach(row => {
+              const r = fromDbRow(row);
+              const biz = r.businessName;
+              delete r.businessName; // it's the key, no need to duplicate
+              data[biz] = r;
+            });
+          } else if (key === 'team-chat') {
+            // Team chat: convert created_at → timestamp, sort by created_at asc (chronological)
+            const rows = await sbFetch(`${table}?select=*&order=created_at.asc`);
+            data = (rows || []).map(row => {
+              const r = fromDbRow(row);
+              // The code expects 'timestamp', not 'createdAt'
+              if (r.createdAt && !r.timestamp) {
+                r.timestamp = r.createdAt;
+              }
+              return r;
+            });
           } else {
             const rows = await sbFetch(`${table}?select=*&order=created_at.desc`);
             data = (rows || []).map(fromDbRow);
@@ -169,6 +243,19 @@ if (typeof window !== 'undefined' && !window.storage) {
               headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
               body: row
             });
+          } else if (key === 'gantt-approvals') {
+            // Dictionary object: each key is a business_name, value is approval data
+            // Upsert each entry
+            const rows = Object.entries(parsed).map(([biz, approval]) => 
+              toDbRow({ businessName: biz, ...approval })
+            );
+            if (rows.length > 0) {
+              await sbFetch('gantt_approvals', {
+                method: 'POST',
+                headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+                body: rows
+              });
+            }
           } else if (Array.isArray(parsed)) {
             // For arrays: get current IDs, compute diff, delete missing, upsert all
             let existingIds = new Set();
@@ -190,7 +277,14 @@ if (typeof window !== 'undefined' && !window.storage) {
             
             // Upsert all
             if (parsed.length > 0) {
-              const rows = parsed.map(toDbRow);
+              const rows = parsed.map(item => {
+                const row = toDbRow(item);
+                // For team_chat: convert timestamp → created_at if present
+                if (key === 'team-chat' && item.timestamp && !row.created_at) {
+                  row.created_at = item.timestamp;
+                }
+                return row;
+              });
               await sbFetch(table, {
                 method: 'POST',
                 headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
@@ -425,11 +519,22 @@ export default function ContentCalendarApp() {
         }
       }
 
-      // Step 1.6: Check for legacy share token in URL (e.g., #share=Xy9k2Bn7Q4)
+      // Step 1.6: Check for share token in URL (e.g., #share=Xy9k2Bn7Q4)
       const shareMatch = hash.match(/share=([a-zA-Z0-9]+)/);
       if (shareMatch) {
         const shareToken = shareMatch[1];
-        const sharedUser = users.find(u => u.shareToken === shareToken && u.role === 'client');
+        // First try the already-loaded users list
+        let sharedUser = users.find(u => u.shareToken === shareToken && u.role === 'client');
+        
+        // If not found in list, query Supabase directly (handles fresh devices)
+        if (!sharedUser && typeof window !== 'undefined' && window.apiShareLookup) {
+          try {
+            sharedUser = await window.apiShareLookup(shareToken);
+          } catch (e) {
+            console.warn('Share token lookup failed:', e.message);
+          }
+        }
+        
         if (sharedUser) {
           setCurrentUser(sharedUser);
           setIsShareMode(true);
@@ -766,22 +871,28 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-6 min-w-0">
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="hidden sm:flex items-center gap-3 sm:gap-4 min-w-0">
                 {branding.logoData ? (
-                  <div className="bg-white rounded-lg p-2 flex-shrink-0">
+                  <button
+                    onClick={() => setActiveView('posts')}
+                    className="bg-white rounded-lg p-2 flex-shrink-0 hover:bg-slate-50 transition cursor-pointer"
+                    title="חזרה לראשי"
+                  >
                     <img 
                       src={branding.logoData} 
                       alt={branding.companyName} 
                       className="h-8 sm:h-10 w-auto object-contain"
                     />
-                  </div>
+                  </button>
                 ) : (
-                  <div 
-                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                  <button
+                    onClick={() => setActiveView('posts')}
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0 hover:opacity-90 transition cursor-pointer"
                     style={{ background: `linear-gradient(135deg, ${branding.secondaryColor}, ${branding.secondaryColor}80)` }}
+                    title="חזרה לראשי"
                   >
                     <Shield className="w-6 h-6 text-white" />
-                  </div>
+                  </button>
                 )}
               </div>
 
@@ -2882,61 +2993,13 @@ function UserModal({ user, existingUsernames, onSave, onClose, defaultRole = 'cl
 function ShareLinkModal({ user, posts = [], branding = null, onClose, onRegenerate }) {
   const [copied, setCopied] = useState(false);
   
-  // Build the full URL with all data encoded - works on any device without server!
+  // Build the share URL - SHORT and CLEAN now that Supabase syncs all data!
+  // Client clicks the link → app loads data from Supabase → shows the dashboard
   const baseUrl = window.location.origin + window.location.pathname;
+  const shareUrl = `${baseUrl}#share=${user.shareToken}`;
   
-  // Filter posts for this client only
-  const clientPosts = posts.filter(p => p.businessName === user.businessName);
-  
-  // Build minimal data payload - only what's needed for client view
-  const sharePayload = {
-    u: { // user
-      username: user.username,
-      name: user.name,
-      businessName: user.businessName,
-      email: user.email || '',
-      role: 'client',
-      logoData: user.logoData || null,
-      shareToken: user.shareToken,
-      package: user.package || null,
-    },
-    p: clientPosts, // posts
-    b: branding ? { // branding
-      companyName: branding.companyName,
-      tagline: branding.tagline,
-      logoData: branding.logoData,
-      primaryColor: branding.primaryColor,
-      secondaryColor: branding.secondaryColor,
-      loginWelcome: branding.loginWelcome,
-      theme: branding.theme,
-    } : null,
-    t: Date.now(), // timestamp
-  };
-  
-  // Encode to base64 (URL-safe)
-  const encodeData = (obj) => {
-    try {
-      const json = JSON.stringify(obj);
-      // Use TextEncoder + btoa for UTF-8 safe encoding (Hebrew support)
-      const bytes = new TextEncoder().encode(json);
-      let binary = '';
-      bytes.forEach(b => binary += String.fromCharCode(b));
-      const b64 = btoa(binary);
-      // Make URL-safe
-      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    } catch (e) {
-      console.error('Encode failed:', e);
-      return '';
-    }
-  };
-  
-  const encodedData = encodeData(sharePayload);
-  
-  // Build the share URL with embedded data
-  const shareUrl = `${baseUrl}#data=${encodedData}`;
-  
-  // Also offer simple token URL for backwards compatibility
-  const tokenUrl = `${baseUrl}#share=${user.shareToken}`;
+  // Count this client's posts for display purposes
+  const clientPostCount = posts.filter(p => p.businessName === user.businessName).length;
 
   const copyToClipboard = async (url = shareUrl) => {
     try {
@@ -2992,15 +3055,14 @@ function ShareLinkModal({ user, posts = [], branding = null, onClose, onRegenera
             <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-emerald-900">
               <p className="font-semibold mb-0.5">לינק ייעודי ללקוח - עובד מכל מכשיר! 📱</p>
-              <p>הלינק מכיל את כל הפוסטים והפרטים מקודדים בתוכו. הלקוח יכנס מהמובייל ללא צורך בשם משתמש וסיסמה ויראה את הגאנט שלו מיד.</p>
-              <p className="mt-1 text-emerald-700">💡 כל פעם שמעדכן פוסטים, שלח לינק חדש (כדי שיהיו מעודכנים אצל הלקוח)</p>
+              <p>הלקוח יכנס מהמובייל ללא צורך בשם משתמש וסיסמה ויראה את הגאנט שלו מיד. הנתונים מסונכרנים בזמן אמת - שינויים שתבצע יופיעו אצל הלקוח מיד.</p>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               לינק הגאנט 
-              <span className="text-xs text-slate-500 font-normal">({clientPosts.length} פוסטים מקודדים בלינק)</span>
+              <span className="text-xs text-slate-500 font-normal">({clientPostCount} פוסטים בגאנט)</span>
             </label>
             <div className="flex gap-2">
               <input
@@ -3032,11 +3094,6 @@ function ShareLinkModal({ user, posts = [], branding = null, onClose, onRegenera
                 )}
               </button>
             </div>
-            {shareUrl.length > 8000 && (
-              <p className="mt-1.5 text-xs text-amber-600">
-                ⚠️ הלינק ארוך מאד ({Math.round(shareUrl.length / 1000)}KB) - חלק מהאפליקציות עלולות לחתוך אותו. מומלץ להשתמש ב-WhatsApp Web או דוא"ל.
-              </p>
-            )}
           </div>
 
           <div>
