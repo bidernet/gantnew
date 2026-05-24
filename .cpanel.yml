@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/biderne1/public_html/app.bidernet.co.il/
+    - /usr/local/bin/npm install --no-audit --no-fund --silent
+    - /usr/local/bin/npm run build
+    - /bin/rm -rf "\/assets"
+    - /bin/cp -R dist/. "\"
