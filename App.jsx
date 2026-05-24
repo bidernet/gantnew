@@ -5606,8 +5606,10 @@ function SmartDatePicker({ value, onChange, allPosts, currentPostId, businessNam
   };
 
   // Group posts by date - exclude current post being edited
+  // ONLY show posts of the current business (so admin doesn't see other clients' posts)
   const postsByDate = allPosts
     .filter(p => p.id !== currentPostId)
+    .filter(p => !businessName || p.businessName === businessName)
     .reduce((acc, post) => {
       if (!acc[post.date]) acc[post.date] = [];
       acc[post.date].push(post);
@@ -5655,9 +5657,9 @@ function SmartDatePicker({ value, onChange, allPosts, currentPostId, businessNam
 
   // Count info for display
   const totalScheduledDays = Object.keys(postsByDate).length;
+  // Since postsByDate already filters by current business, any post = same business conflict
   const sameBusinessConflict = (dateKey) => {
-    if (!businessName) return false;
-    return (postsByDate[dateKey] || []).some(p => p.businessName === businessName);
+    return (postsByDate[dateKey] || []).length > 0;
   };
 
   return (
@@ -5779,22 +5781,20 @@ function SmartDatePicker({ value, onChange, allPosts, currentPostId, businessNam
           {/* Legend & info */}
           <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
             {selectedDate && postsByDate[selectedDate] && postsByDate[selectedDate].length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-md p-2">
-                <div className="text-xs font-semibold text-amber-900 mb-1 flex items-center gap-1">
+              <div className="bg-rose-50 border border-rose-200 rounded-md p-2">
+                <div className="text-xs font-semibold text-rose-900 mb-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
-                  {postsByDate[selectedDate].length} פוסטים כבר מתוזמנים לתאריך זה:
+                  כבר יש {postsByDate[selectedDate].length} פוסטים של {businessName || 'העסק הזה'} בתאריך זה:
                 </div>
                 <div className="space-y-0.5">
                   {postsByDate[selectedDate].slice(0, 3).map(p => (
-                    <div key={p.id} className="text-xs text-amber-800 flex items-center gap-1.5">
+                    <div key={p.id} className="text-xs text-rose-800 flex items-center gap-1.5">
                       <span className="font-mono">{p.time || '--:--'}</span>
-                      <span>·</span>
-                      <span className="truncate">{p.businessName}</span>
-                      {p.title && <span className="text-amber-700 truncate">- {p.title}</span>}
+                      {p.title && <span className="truncate">· {p.title}</span>}
                     </div>
                   ))}
                   {postsByDate[selectedDate].length > 3 && (
-                    <div className="text-xs text-amber-700">+ {postsByDate[selectedDate].length - 3} נוספים</div>
+                    <div className="text-xs text-rose-700">+ {postsByDate[selectedDate].length - 3} נוספים</div>
                   )}
                 </div>
               </div>
@@ -5802,14 +5802,15 @@ function SmartDatePicker({ value, onChange, allPosts, currentPostId, businessNam
             
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-3 text-slate-500">
-                <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
-                  <span>פוסטים מתוזמנים</span>
-                </div>
-                {businessName && (
+                {businessName ? (
                   <div className="flex items-center gap-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
-                    <span>אותו עסק</span>
+                    <span>פוסטים של {businessName}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                    <span>פוסטים מתוזמנים</span>
                   </div>
                 )}
               </div>

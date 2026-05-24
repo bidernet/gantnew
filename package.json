@@ -1,14 +1,13 @@
 {
   "name": "bidernet-content-calendar",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "מערכת ניהול גאנטי תוכן עבור bidernet group",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
+    "preview": "vite preview"
   },
   "dependencies": {
     "react": "^18.2.0",
