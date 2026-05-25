@@ -2653,8 +2653,8 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      alert("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9. \u05E2\u05D3 4MB");
+    if (file.size > 50 * 1024 * 1024) {
+      alert("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9. \u05E2\u05D3 50MB");
       return;
     }
     const reader = new FileReader();
@@ -2801,7 +2801,7 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
           ] }) : /* @__PURE__ */ jsxs("div", { onClick: () => fileInputRef.current?.click(), className: "border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition", children: [
             /* @__PURE__ */ jsx(Upload, { className: "w-8 h-8 text-slate-400 mx-auto mb-2" }),
             /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600 font-medium", children: "\u05DC\u05D7\u05E5 \u05DC\u05D4\u05E2\u05DC\u05D0\u05EA \u05E7\u05D5\u05D1\u05E5" }),
-            /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-400 mt-1", children: "\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D0\u05D5 \u05D5\u05D9\u05D3\u05D0\u05D5 \xB7 \u05E2\u05D3 4MB" })
+            /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-400 mt-1", children: "\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D0\u05D5 \u05D5\u05D9\u05D3\u05D0\u05D5 \xB7 \u05E2\u05D3 50MB" })
           ] }),
           /* @__PURE__ */ jsx("input", { ref: fileInputRef, type: "file", accept: "image/*,video/*", onChange: handleFileUpload, className: "hidden" })
         ] })
