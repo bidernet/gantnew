@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.3.8-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F4F1} Platforms: Facebook, Instagram, TikTok", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.3.9-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F527} FIX: Platform icons in root folder", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -1914,7 +1914,7 @@ function PublishCard({ post, client, businessColor, onPublished, onClick, onDele
               className: "px-2 py-0.5 rounded font-medium flex items-center gap-1",
               style: { backgroundColor: "#d7ff00", color: "#013d19" },
               children: [
-                /* @__PURE__ */ jsx("img", { src: `./icons/${p.id}.png`, alt: p.name, style: { width: "14px", height: "14px", objectFit: "contain" } }),
+                /* @__PURE__ */ jsx("img", { src: `./platform-${p.id}.png`, alt: p.name, style: { width: "14px", height: "14px", objectFit: "contain" } }),
                 p.name
               ]
             },
@@ -2095,7 +2095,7 @@ function PublishDetailModal({ post, client, onClose, onPublished, onDelete }) {
               className: `py-3 px-4 rounded-lg border-2 transition flex items-center justify-between gap-2 ${visited ? "bg-emerald-50 border-emerald-300" : "bg-white border-slate-200 hover:border-slate-400 hover:shadow-sm"}`,
               children: [
                 /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2", children: [
-                  /* @__PURE__ */ jsx("img", { src: `./icons/${p.id}.png`, alt: p.name, style: { width: "24px", height: "24px", objectFit: "contain" } }),
+                  /* @__PURE__ */ jsx("img", { src: `./platform-${p.id}.png`, alt: p.name, style: { width: "24px", height: "24px", objectFit: "contain" } }),
                   /* @__PURE__ */ jsx("span", { className: "font-semibold text-sm text-slate-900", children: p.name })
                 ] }),
                 visited ? /* @__PURE__ */ jsx(CheckCircle, { className: "w-5 h-5 text-emerald-600" }) : /* @__PURE__ */ jsx(LinkIcon, { className: "w-4 h-4 text-slate-400" })
@@ -2811,7 +2811,7 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
                 },
                 className: `py-3 px-2 text-sm rounded-lg border transition flex items-center justify-center ${isSelected ? "font-semibold" : "bg-white border-slate-200 hover:bg-slate-50"}`,
                 style: isSelected ? { backgroundColor: "#d7ff00", borderColor: "#013d19" } : {},
-                children: /* @__PURE__ */ jsx("img", { src: `./icons/${p.id}.png`, alt: p.name, style: { width: "32px", height: "32px", objectFit: "contain" } })
+                children: /* @__PURE__ */ jsx("img", { src: `./platform-${p.id}.png`, alt: p.name, style: { width: "32px", height: "32px", objectFit: "contain" } })
               },
               p.id
             );
@@ -4043,7 +4043,7 @@ ${stripHtml(post.content)}`,
                             platformIcons && /* @__PURE__ */ jsx("div", { className: "flex items-center gap-1", children: platformIcons.map((pid, i) => /* @__PURE__ */ jsx(
                               "img",
                               {
-                                src: `./icons/${pid}.png`,
+                                src: `./platform-${pid}.png`,
                                 alt: pid,
                                 style: { width: "12px", height: "12px", objectFit: "contain" }
                               },
