@@ -1,66 +1,52 @@
-# 🎨 bidernet v2.3.9-php - תיקון אייקונים
+# 🎨 bidernet v2.4.0-php - אייקוני SVG
 
-## 🔧 מה תוקן בגרסה זו
+## ✨ מה חדש ב-v2.4.0
 
-**בעיה ב-v2.3.8**: האייקונים היו בתוך תיקייה `icons/` ולא הוצגו (שגיאת 404).
+**אייקוני פלטפורמה הפכו ל-SVG!**
 
-**הפתרון ב-v2.3.9**: האייקונים עכשיו **באותה תיקייה ראשית** של האפליקציה, ללא צורך בתיקיית משנה.
+יתרונות:
+- ✅ איכות מושלמת בכל גודל (לא מתפקסל)
+- ✅ קבצים קטנים יותר
+- ✅ צבע ירוק כהה של המותג `#013d19`
+- ✅ נראה חד וברור גם במסכים בהבחנה גבוהה (Retina)
 
-## 🆕 כל השינויים בגרסה (מצטבר מ-v2.3.7+):
+## 🚀 התקנה
 
-### 🎨 מיתוג
-- Favicon (10 גדלים)
-- כותרת: "בידרנט מערכת גאנטים"  
-- צבעי מותג: `#d7ff00` + `#013d19`
-
-### 📱 פלטפורמות
-- רק 3: Facebook, Instagram, TikTok
-- אייקונים ירוקים מותאמים
-
-### 📝 עריכת פוסט
-- בחירת פלטפורמות - רק אייקונים, ללא טקסט
-- שדה תוכן - 10 שורות (כפול)
-- אזור העלאת קובץ - קומפקטי
-
-## 🚀 התקנה - חשוב מאוד!
-
-### העלה את כל הקבצים ל-`/public_html/app.bidernet.co.il/` (כולם באותה תיקייה!):
+### העלה ל-`/public_html/app.bidernet.co.il/` (כל הקבצים באותה תיקייה):
 
 **קבצים ראשיים:**
 - `app.js` ⭐
-- `index.html` ⭐
-- `api.php` ⭐
+- `index.html`
+- `api.php`
 
-**אייקוני פלטפורמה (3 קבצים - באותה תיקייה!):**
-- `platform-facebook.png` ⭐
-- `platform-instagram.png` ⭐
-- `platform-tiktok.png` ⭐
+**אייקוני פלטפורמה (3 קבצי SVG):**
+- `platform-facebook.svg` ⭐
+- `platform-instagram.svg` ⭐
+- `platform-tiktok.svg` ⭐
 
-**Favicons (10 קבצים):**
-- `favicon.ico`, `favicon.png`
-- `favicon-16.png`, `favicon-32.png`, `favicon-48.png`, `favicon-64.png`
-- `favicon-128.png`, `favicon-192.png`, `favicon-256.png`
+**Favicons (10 קבצים)** - אם עוד לא העלית:
+- `favicon.ico`, `favicon.png`, `favicon-16/32/48/64/128/192/256.png`
 - `apple-touch-icon.png`
 
-⚠️ **אל תחליף את `config.php`** - השאר את הסיסמה הקיימת!
+⚠️ **אם יש לך אייקונים ישנים PNG בשרת** - אפשר למחוק אותם:
+- `icons/` (תיקייה ישנה - מחק)
+- `platform-facebook.png`, `platform-instagram.png`, `platform-tiktok.png` (ישנים - מחק)
 
-⚠️ **כל הקבצים באותה תיקייה ראשית** - אין צורך ביצירת תיקיות משנה!
+⚠️ **אל תחליף את `config.php`!**
 
-### בדיקה אחרי העלאה
+## 🧪 בדיקה
 
 נסה לפתוח בדפדפן:
 ```
-https://app.bidernet.co.il/platform-facebook.png
+https://app.bidernet.co.il/platform-facebook.svg
 ```
 
-אמור להופיע האייקון. אם 404 - הקובץ לא הועלה.
-
-### רענון
-
-**Ctrl+Shift+R**
+אמור להופיע אייקון פייסבוק ירוק.
 
 ב-Console (F12):
 ```
-🎯 bidernet Content Calendar v2.3.9-php
-🔧 FIX: Platform icons in root folder
+🎯 bidernet Content Calendar v2.4.0-php
+✨ Platform icons now SVG - crisp at any size!
 ```
+
+ב-UI - מסך עריכת פוסט → בחירת פלטפורמות → אייקונים חדים וגדולים בצבע ירוק כהה.
