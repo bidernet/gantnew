@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.3.7-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F3A8} New brand colors: #d7ff00 + #013d19", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.3.8-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F4F1} Platforms: Facebook, Instagram, TikTok", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -194,8 +194,6 @@ var DEFAULT_BRANDING = {
 var PLATFORMS = [
   { id: "facebook", name: "Facebook", icon: "f", color: "#1877F2", limit: 63206, ideal: 80 },
   { id: "instagram", name: "Instagram", icon: "\u{1F4F7}", color: "#E4405F", limit: 2200, ideal: 138 },
-  { id: "twitter", name: "X / Twitter", icon: "\u{1D54F}", color: "#000000", limit: 280, ideal: 100 },
-  { id: "linkedin", name: "LinkedIn", icon: "in", color: "#0A66C2", limit: 3e3, ideal: 150 },
   { id: "tiktok", name: "TikTok", icon: "\u266A", color: "#000000", limit: 2200, ideal: 100 }
 ];
 var POST_CATEGORIES = {
@@ -1913,11 +1911,10 @@ function PublishCard({ post, client, businessColor, onPublished, onClick, onDele
           platformIcons.map((p) => /* @__PURE__ */ jsxs(
             "span",
             {
-              className: "px-2 py-0.5 rounded font-medium",
-              style: { backgroundColor: p.color + "15", color: p.color },
+              className: "px-2 py-0.5 rounded font-medium flex items-center gap-1",
+              style: { backgroundColor: "#d7ff00", color: "#013d19" },
               children: [
-                p.icon,
-                " ",
+                /* @__PURE__ */ jsx("img", { src: `./icons/${p.id}.png`, alt: p.name, style: { width: "14px", height: "14px", objectFit: "contain" } }),
                 p.name
               ]
             },
@@ -2098,7 +2095,7 @@ function PublishDetailModal({ post, client, onClose, onPublished, onDelete }) {
               className: `py-3 px-4 rounded-lg border-2 transition flex items-center justify-between gap-2 ${visited ? "bg-emerald-50 border-emerald-300" : "bg-white border-slate-200 hover:border-slate-400 hover:shadow-sm"}`,
               children: [
                 /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2", children: [
-                  /* @__PURE__ */ jsx("span", { style: { fontSize: "20px", color: p.color }, children: p.icon }),
+                  /* @__PURE__ */ jsx("img", { src: `./icons/${p.id}.png`, alt: p.name, style: { width: "24px", height: "24px", objectFit: "contain" } }),
                   /* @__PURE__ */ jsx("span", { className: "font-semibold text-sm text-slate-900", children: p.name })
                 ] }),
                 visited ? /* @__PURE__ */ jsx(CheckCircle, { className: "w-5 h-5 text-emerald-600" }) : /* @__PURE__ */ jsx(LinkIcon, { className: "w-4 h-4 text-slate-400" })
@@ -2801,22 +2798,20 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
         ] }),
         /* @__PURE__ */ jsxs("div", { children: [
           /* @__PURE__ */ jsx("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: "\u05E4\u05DC\u05D8\u05E4\u05D5\u05E8\u05DE\u05D5\u05EA \u05E4\u05E8\u05E1\u05D5\u05DD" }),
-          /* @__PURE__ */ jsx("div", { className: "grid grid-cols-2 md:grid-cols-5 gap-2", children: PLATFORMS.map((p) => {
+          /* @__PURE__ */ jsx("div", { className: "grid grid-cols-3 gap-2", children: PLATFORMS.map((p) => {
             const isSelected = formData.platforms.includes(p.id);
-            return /* @__PURE__ */ jsxs(
+            return /* @__PURE__ */ jsx(
               "button",
               {
                 type: "button",
+                title: p.name,
                 onClick: () => {
                   const platforms = isSelected ? formData.platforms.filter((x) => x !== p.id) : [...formData.platforms, p.id];
                   setFormData({ ...formData, platforms });
                 },
-                className: `py-2 px-2 text-sm rounded-lg border transition flex items-center justify-center gap-1.5 ${isSelected ? "font-medium" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`,
-                style: isSelected ? { backgroundColor: p.color + "15", borderColor: p.color, color: p.color } : {},
-                children: [
-                  /* @__PURE__ */ jsx("span", { style: { fontSize: "16px" }, children: p.icon }),
-                  /* @__PURE__ */ jsx("span", { children: p.name })
-                ]
+                className: `py-3 px-2 text-sm rounded-lg border transition flex items-center justify-center ${isSelected ? "font-semibold" : "bg-white border-slate-200 hover:bg-slate-50"}`,
+                style: isSelected ? { backgroundColor: "#d7ff00", borderColor: "#013d19" } : {},
+                children: /* @__PURE__ */ jsx("img", { src: `./icons/${p.id}.png`, alt: p.name, style: { width: "32px", height: "32px", objectFit: "contain" } })
               },
               p.id
             );
@@ -2865,7 +2860,7 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
               value: formData.content,
               onChange: (html) => setFormData({ ...formData, content: html }),
               placeholder: "\u05DB\u05EA\u05D5\u05D1 \u05DB\u05D0\u05DF \u05D0\u05EA \u05EA\u05D5\u05DB\u05DF \u05D4\u05E4\u05D5\u05E1\u05D8...",
-              rows: 5
+              rows: 10
             }
           ),
           /* @__PURE__ */ jsx(SmartCharCounter, { content: formData.content, platforms: formData.platforms })
@@ -2876,10 +2871,12 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
             formData.mediaType === "image" ? /* @__PURE__ */ jsx("img", { src: formData.mediaData, alt: "", className: "w-full max-h-64 object-cover rounded-lg" }) : /* @__PURE__ */ jsx("video", { src: formData.mediaData, controls: true, className: "w-full max-h-64 rounded-lg bg-black" }),
             /* @__PURE__ */ jsx("button", { type: "button", onClick: () => setFormData({ ...formData, mediaType: null, mediaData: null, mediaName: "" }), className: "absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-white rounded-lg shadow-md transition", children: /* @__PURE__ */ jsx(Trash2, { className: "w-4 h-4 text-red-500" }) }),
             /* @__PURE__ */ jsx("div", { className: "mt-2 text-xs text-slate-500 truncate", children: formData.mediaName })
-          ] }) : /* @__PURE__ */ jsxs("div", { onClick: () => fileInputRef.current?.click(), className: "border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition", children: [
-            /* @__PURE__ */ jsx(Upload, { className: "w-8 h-8 text-slate-400 mx-auto mb-2" }),
-            /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600 font-medium", children: "\u05DC\u05D7\u05E5 \u05DC\u05D4\u05E2\u05DC\u05D0\u05EA \u05E7\u05D5\u05D1\u05E5" }),
-            /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-400 mt-1", children: "\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D0\u05D5 \u05D5\u05D9\u05D3\u05D0\u05D5 \xB7 \u05E2\u05D3 50MB" })
+          ] }) : /* @__PURE__ */ jsxs("div", { onClick: () => fileInputRef.current?.click(), className: "border-2 border-dashed border-slate-300 rounded-lg py-3 px-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition flex items-center justify-center gap-3", children: [
+            /* @__PURE__ */ jsx(Upload, { className: "w-5 h-5 text-slate-400 flex-shrink-0" }),
+            /* @__PURE__ */ jsxs("div", { className: "flex flex-col items-start sm:flex-row sm:items-center sm:gap-2", children: [
+              /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600 font-medium", children: "\u05DC\u05D7\u05E5 \u05DC\u05D4\u05E2\u05DC\u05D0\u05EA \u05E7\u05D5\u05D1\u05E5" }),
+              /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-400", children: "\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D0\u05D5 \u05D5\u05D9\u05D3\u05D0\u05D5 \xB7 \u05E2\u05D3 50MB" })
+            ] })
           ] }),
           /* @__PURE__ */ jsx("input", { ref: fileInputRef, type: "file", accept: "image/*,video/*", onChange: handleFileUpload, className: "hidden" })
         ] })
@@ -3878,8 +3875,8 @@ function GanttView({ posts, businesses, onPostClick, getBusinessColor }) {
     if (!platforms || platforms.length === 0) return null;
     return platforms.slice(0, 3).map((pid) => {
       const p = PLATFORMS.find((pl) => pl.id === pid);
-      return p ? p.icon : "";
-    });
+      return p ? p.id : "";
+    }).filter(Boolean);
   };
   const getStatusStyle = (post) => {
     const approval = post.clientApproval;
@@ -4043,7 +4040,15 @@ ${stripHtml(post.content)}`,
                           /* @__PURE__ */ jsx("div", { className: "text-xs font-medium text-slate-900 truncate leading-tight", children: displayContent || "\u05DC\u05DC\u05D0 \u05DB\u05D5\u05EA\u05E8\u05EA" }),
                           /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between mt-0.5", children: [
                             post.time && /* @__PURE__ */ jsx("span", { className: "text-[10px] text-slate-500 font-mono", children: post.time }),
-                            platformIcons && /* @__PURE__ */ jsx("div", { className: "flex items-center gap-0.5 text-[10px] text-slate-600", children: platformIcons.map((icon, i) => /* @__PURE__ */ jsx("span", { children: icon }, i)) })
+                            platformIcons && /* @__PURE__ */ jsx("div", { className: "flex items-center gap-1", children: platformIcons.map((pid, i) => /* @__PURE__ */ jsx(
+                              "img",
+                              {
+                                src: `./icons/${pid}.png`,
+                                alt: pid,
+                                style: { width: "12px", height: "12px", objectFit: "contain" }
+                              },
+                              i
+                            )) })
                           ] })
                         ] })
                       ]
