@@ -1,35 +1,29 @@
-# 🆕 bidernet v2.3.5-php - תיקון דף לבן
+# 🆕 bidernet v2.3.6-php - ללא צ'אט צוותי
 
-## 🐛 הבעיה שתוקנה
+## 🔇 מה השתנה ב-v2.3.6
 
-**דף לבן עם שגיאת "Cannot read properties of undefined (reading 'length')"**
+**הצ'אט הצוותי הוסר** כדי למנוע שגיאות.
 
-הסיבה: כשה-API החזיר תשובה לא צפויה (404, JSON שבור, או null), הקוד ניסה לקרוא `.length` או `.filter()` על משהו שהיה `undefined`. זה הקריס את כל ה-React app.
+הכל אחר נשאר כמו ב-v2.3.5:
+- ✅ הגנות על מערכים ריקים/undefined
+- ✅ טיפול בשגיאות API 404
+- ✅ media uploads עד 50MB
+- ✅ שמירת תמונות ב-DB
 
-## ✅ מה שתוקן ב-v2.3.5
-
-1. **Defensive array handling** - כל המקומות שקוראים posts, users, templates, etc. עכשיו בודקים שזה באמת array לפני שמשתמשים
-2. **Error handling משופר** - תשובות לא-JSON (כמו דף HTML של 404) לא מקריסות את האפליקציה
-3. **שינוי גרסה** - מעכשיו תראה `v2.3.5-php` ב-Console
-
-## 🔍 בדיקה ש-v2.3.5 עלה
+## 🔍 בדיקה ש-v2.3.6 עלה
 
 ב-Console (F12) אמור להראות:
 ```
-🎯 bidernet Content Calendar v2.3.5-php
-🛡️ FIX: defensive arrays + better error handling
+🎯 bidernet Content Calendar v2.3.6-php
+🔇 Team chat disabled in this version
 ```
-
-`apiPing()` יחזיר `version: "v2.3.5-php"`
 
 ## 🚀 התקנה
 
 ### 1️⃣ העלה ל-`/public_html/app.bidernet.co.il/`:
 
-- `app.js` ⭐ **חדש - הקוד עם התיקונים**
-- `api.php` (אם עוד לא העלית)
-- `index.html` (אם עוד לא העלית)
-- `php.ini` (אם עוד לא העלית)
+- `app.js` ⭐ **חדש (435KB, ירד מ-451KB)**
+- שאר הקבצים אם עוד לא העלית
 
 ⚠️ **אל תחליף את `config.php`** - השאר את הסיסמה הקיימת!
 
@@ -37,13 +31,6 @@
 
 **Ctrl+Shift+R** או **Cmd+Shift+R**
 
-### 3️⃣ בדוק שיש שגיאות לא קריטיות
+## 💡 להחזיר את הצ'אט בעתיד
 
-אם תראה הודעות `console.warn` (כתום) זה בסדר - זה אומר שמערכת ההגנה עבדה. שגיאות אדומות `console.error` הן הבעייתיות.
-
-## ⚠️ אם עדיין יש בעיה
-
-אם עדיין יש דף לבן או שגיאה אחרת:
-1. צלם screenshot של ה-Console (F12)
-2. צלם screenshot של Network tab (F12 → Network)
-3. שלח לי - אטפל בזה
+הקוד של הצ'אט עדיין שם, רק מוסתר. כשתרצה להחזיר - פנה אליי.
