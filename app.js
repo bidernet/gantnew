@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.3.4-php", "color: #6366f1; font-size: 14px; font-weight: bold;");
-  console.log("%c\u{1F527} FIX: media uploads now persist + 50MB limit", "color: #ef4444; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.3.5-php", "color: #6366f1; font-size: 14px; font-weight: bold;");
+  console.log("%c\u{1F6E1}\uFE0F FIX: defensive arrays + better error handling", "color: #ef4444; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -29,13 +29,21 @@ async function apiFetch(action, options = {}) {
   if (options.body) init.body = JSON.stringify(options.body);
   const res = await fetch(url, init);
   const text = await res.text();
+  if (!res.ok) {
+    let errMsg = `API ${action} failed (${res.status})`;
+    try {
+      const errData = JSON.parse(text);
+      if (errData.error) errMsg = errData.error;
+    } catch (e) {
+    }
+    throw new Error(errMsg);
+  }
   let data;
   try {
     data = JSON.parse(text);
   } catch (e) {
-    throw new Error(`API ${action} returned non-JSON: ${text.substring(0, 200)}`);
+    throw new Error(`API ${action} returned non-JSON: ${text.substring(0, 100)}`);
   }
-  if (!res.ok) throw new Error(data.error || `API ${action} failed (${res.status})`);
   return data;
 }
 if (typeof window !== "undefined" && !window.storage) {
@@ -46,7 +54,18 @@ if (typeof window !== "undefined" && !window.storage) {
       if (apiAction) {
         try {
           const data = await apiFetch(apiAction);
-          const value = JSON.stringify(data);
+          let safeData = data;
+          if (key !== "branding") {
+            if (!Array.isArray(safeData)) {
+              console.warn(`API '${apiAction}' returned non-array, normalizing to []:`, safeData);
+              safeData = [];
+            }
+          } else {
+            if (!safeData || typeof safeData !== "object" || Array.isArray(safeData)) {
+              safeData = {};
+            }
+          }
+          const value = JSON.stringify(safeData);
           memCache[key] = value;
           return { value };
         } catch (e) {
@@ -211,7 +230,13 @@ function ContentCalendarApp() {
       try {
         const brandingResult = await window.storage.get("branding");
         if (brandingResult && brandingResult.value) {
-          setBranding({ ...DEFAULT_BRANDING, ...JSON.parse(brandingResult.value) });
+          try {
+            const parsed = JSON.parse(brandingResult.value);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              setBranding({ ...DEFAULT_BRANDING, ...parsed });
+            }
+          } catch (e) {
+          }
         }
       } catch (e) {
       }
@@ -219,7 +244,12 @@ function ContentCalendarApp() {
       try {
         const usersResult = await window.storage.get("users");
         if (usersResult && usersResult.value) {
-          users = JSON.parse(usersResult.value);
+          try {
+            const parsed = JSON.parse(usersResult.value);
+            users = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            users = [];
+          }
         }
       } catch (e) {
         users = [];
@@ -380,7 +410,12 @@ function LoginScreen({ onLogin, branding }) {
         try {
           const usersResult = await window.storage.get("users");
           if (usersResult && usersResult.value) {
-            users = JSON.parse(usersResult.value);
+            try {
+              const parsed = JSON.parse(usersResult.value);
+              users = Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+              users = [];
+            }
           }
         } catch (e) {
           users = [];
@@ -530,13 +565,28 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
         window.storage.get("templates").catch(() => null)
       ]);
       if (postsResult && postsResult.value) {
-        setPosts(JSON.parse(postsResult.value));
+        try {
+          const parsed = JSON.parse(postsResult.value);
+          setPosts(Array.isArray(parsed) ? parsed : []);
+        } catch (e) {
+          setPosts([]);
+        }
       }
       if (usersResult && usersResult.value) {
-        setUsers(JSON.parse(usersResult.value));
+        try {
+          const parsed = JSON.parse(usersResult.value);
+          setUsers(Array.isArray(parsed) ? parsed : []);
+        } catch (e) {
+          setUsers([]);
+        }
       }
       if (templatesResult && templatesResult.value) {
-        setTemplates(JSON.parse(templatesResult.value));
+        try {
+          const parsed = JSON.parse(templatesResult.value);
+          setTemplates(Array.isArray(parsed) ? parsed : []);
+        } catch (e) {
+          setTemplates([]);
+        }
       }
     } finally {
       setLoading(false);
@@ -554,7 +604,9 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
     setTemplates(updated);
     await window.storage.set("templates", JSON.stringify(updated));
   };
-  const clientUsers = users.filter((u) => u.role === "client");
+  const safeUsers = Array.isArray(users) ? users : [];
+  const safePosts = Array.isArray(posts) ? posts : [];
+  const clientUsers = safeUsers.filter((u) => u && u.role === "client");
   const businesses = [...new Set(clientUsers.map((u) => u.businessName).filter(Boolean))];
   const getBusinessColor = (businessName) => {
     const colors = ["bg-rose-500", "bg-blue-500", "bg-emerald-500", "bg-purple-500", "bg-amber-500", "bg-cyan-500", "bg-pink-500", "bg-indigo-500"];
@@ -849,7 +901,8 @@ function ClientDashboard({ user, onLogout, branding }) {
       setLoading(true);
       const result = await window.storage.get("content-posts");
       if (result && result.value) {
-        const all = JSON.parse(result.value);
+        const parsed = JSON.parse(result.value);
+        const all = Array.isArray(parsed) ? parsed : [];
         setPosts(all.filter((p) => p.businessName === user.businessName));
       }
     } finally {
@@ -858,7 +911,14 @@ function ClientDashboard({ user, onLogout, branding }) {
   };
   const savePosts = async (updatedClientPosts) => {
     const allResult = await window.storage.get("content-posts");
-    const all = allResult && allResult.value ? JSON.parse(allResult.value) : [];
+    let all = [];
+    if (allResult && allResult.value) {
+      try {
+        const parsed = JSON.parse(allResult.value);
+        if (Array.isArray(parsed)) all = parsed;
+      } catch (e) {
+      }
+    }
     const otherPosts = all.filter((p) => p.businessName !== user.businessName);
     const merged = [...otherPosts, ...updatedClientPosts];
     await window.storage.set("content-posts", JSON.stringify(merged));
@@ -1182,14 +1242,22 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
     try {
       const result = await window.storage.get("gantt-approvals");
       if (result && result.value) {
-        setGanttApprovals(JSON.parse(result.value));
+        try {
+          const parsed = JSON.parse(result.value);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            setGanttApprovals(parsed);
+          }
+        } catch (e) {
+        }
       }
     } catch (e) {
     }
   };
-  const filteredPosts = posts.filter((post) => {
+  const safePosts = Array.isArray(posts) ? posts : [];
+  const filteredPosts = safePosts.filter((post) => {
+    if (!post) return false;
     const matchesBusiness = selectedBusiness === "all" || post.businessName === selectedBusiness;
-    const matchesSearch = !searchTerm || stripHtml(post.content).toLowerCase().includes(searchTerm.toLowerCase()) || post.businessName.toLowerCase().includes(searchTerm.toLowerCase()) || post.title && post.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = !searchTerm || stripHtml(post.content || "").toLowerCase().includes(searchTerm.toLowerCase()) || (post.businessName || "").toLowerCase().includes(searchTerm.toLowerCase()) || post.title && post.title.toLowerCase().includes(searchTerm.toLowerCase());
     let matchesMonth = true;
     if (viewMode === "timeline" && post.date) {
       const postDate = new Date(post.date);
@@ -1241,26 +1309,28 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
     a.click();
     URL.revokeObjectURL(url);
   };
-  const postsWithApproval = posts.filter((p) => p.clientApproval);
-  const approvedPosts = postsWithApproval.filter((p) => p.clientApproval.status === "approved");
-  const rejectedPosts = postsWithApproval.filter((p) => p.clientApproval.status === "rejected");
-  const businessStats = businesses.map((biz) => {
-    const bizPosts = posts.filter((p) => p.businessName === biz);
-    const client = clientUsers.find((u) => u.businessName === biz);
+  const postsWithApproval = safePosts.filter((p) => p && p.clientApproval);
+  const approvedPosts = postsWithApproval.filter((p) => p.clientApproval && p.clientApproval.status === "approved");
+  const rejectedPosts = postsWithApproval.filter((p) => p.clientApproval && p.clientApproval.status === "rejected");
+  const safeBusinesses = Array.isArray(businesses) ? businesses : [];
+  const safeClientUsers = Array.isArray(clientUsers) ? clientUsers : [];
+  const businessStats = safeBusinesses.map((biz) => {
+    const bizPosts = safePosts.filter((p) => p && p.businessName === biz);
+    const client = safeClientUsers.find((u) => u && u.businessName === biz);
     return {
       name: biz,
       total: bizPosts.length,
-      approved: bizPosts.filter((p) => p.clientApproval?.status === "approved").length,
-      rejected: bizPosts.filter((p) => p.clientApproval?.status === "rejected").length,
+      approved: bizPosts.filter((p) => p.clientApproval && p.clientApproval.status === "approved").length,
+      rejected: bizPosts.filter((p) => p.clientApproval && p.clientApproval.status === "rejected").length,
       pending: bizPosts.filter((p) => !p.clientApproval).length,
-      ganttApproval: ganttApprovals[biz],
-      logoData: client?.logoData || null
+      ganttApproval: ganttApprovals && ganttApprovals[biz],
+      logoData: client && client.logoData ? client.logoData : null
     };
   });
   const activeBusinesses = businessStats.filter((b) => b.approved > 0 || b.rejected > 0 || b.ganttApproval);
   const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  const publishReadyPosts = posts.filter(
-    (p) => p.date <= todayStr && p.status !== "published" && p.clientApproval?.status === "approved"
+  const publishReadyPosts = safePosts.filter(
+    (p) => p && p.date && p.date <= todayStr && p.status !== "published" && p.clientApproval && p.clientApproval.status === "approved"
   );
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     publishReadyPosts.length > 0 && selectedBusiness === "all" && /* @__PURE__ */ jsxs("div", { className: "mb-4 bg-gradient-to-l from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-4 flex items-center gap-4", children: [
@@ -4321,7 +4391,12 @@ function TeamChat({ currentUser, allUsers }) {
     try {
       const result = await window.storage.get("team-chat");
       if (result && result.value) {
-        setMessages(JSON.parse(result.value));
+        try {
+          const parsed = JSON.parse(result.value);
+          setMessages(Array.isArray(parsed) ? parsed : []);
+        } catch (e) {
+          setMessages([]);
+        }
       }
     } catch (e) {
     }
