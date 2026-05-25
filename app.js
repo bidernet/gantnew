@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u2728 Platform icons now SVG - crisp at any size!", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.1-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u2728 Platform icons embedded inline - no more 404!", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -196,6 +196,20 @@ var PLATFORMS = [
   { id: "instagram", name: "Instagram", icon: "\u{1F4F7}", color: "#E4405F", limit: 2200, ideal: 138 },
   { id: "tiktok", name: "TikTok", icon: "\u266A", color: "#000000", limit: 2200, ideal: 100 }
 ];
+var PLATFORM_SVG = {
+  facebook: /* @__PURE__ */ jsx("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 430 430", fill: "#013d19", style: { display: "block" }, children: /* @__PURE__ */ jsx("path", { fillRule: "evenodd", d: "M165.857 100c0-40.317 32.683-73 73-73h73.75a3 3 0 0 1 3 3v72.679a3 3 0 0 1-3 3h-51.071c-9.389 0-17 7.611-17 17v49.678h74.678a3 3 0 0 1 2.895 3.789l-19.822 72.679a3 3 0 0 1-2.894 2.211h-54.857V400a3 3 0 0 1-3 3h-72.679a3 3 0 0 1-2.121-.879 3 3 0 0 1-.879-2.121V251.036H111a3 3 0 0 1-3-3v-72.679a3 3 0 0 1 3-3h54.857zm73-67c-37.003 0-67 29.997-67 67v75.357a3 3 0 0 1-3 3H114v66.679h54.857a3 3 0 0 1 3 3V397h66.679V248.036a3 3 0 0 1 3-3h55.565l18.186-66.679h-73.751a3 3 0 0 1-3-3v-52.678c0-12.703 10.297-23 23-23h48.071V33z", clipRule: "evenodd" }) }),
+  instagram: /* @__PURE__ */ jsxs("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 430 430", fill: "#013d19", style: { display: "block" }, children: [
+    /* @__PURE__ */ jsx("path", { fillRule: "evenodd", d: "M127 215c0-48.601 39.399-88 88-88s88 39.399 88 88-39.399 88-88 88-88-39.399-88-88m88-82c-45.287 0-82 36.713-82 82s36.713 82 82 82 82-36.713 82-82-36.713-82-82-82", clipRule: "evenodd" }),
+    /* @__PURE__ */ jsx("path", { d: "M315 109a6 6 0 1 0 0 12h.1a6 6 0 1 0 0-12z" }),
+    /* @__PURE__ */ jsx("path", { fillRule: "evenodd", d: "M52 115c0-34.794 28.206-63 63-63h200c34.794 0 63 28.206 63 63v200c0 34.794-28.206 63-63 63H115c-34.794 0-63-28.206-63-63zm63-57c-31.48 0-57 25.52-57 57v200c0 31.48 25.52 57 57 57h200c31.48 0 57-25.52 57-57V115c0-31.48-25.52-57-57-57z", clipRule: "evenodd" })
+  ] }),
+  tiktok: /* @__PURE__ */ jsx("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 430 430", fill: "#013d19", style: { display: "block" }, children: /* @__PURE__ */ jsx("path", { fillRule: "evenodd", d: "M212.631 30a3 3 0 0 1 3-3h73.816a3 3 0 0 1 3 3c0 41.388 33.542 74.938 74.917 74.938a3 3 0 0 1 3 3v73.836a3 3 0 0 1-3 3c-27.173 0-52.718-7.009-74.917-19.319v125.432q0 .158-.016.314C291.387 353.124 240.879 403 178.723 403 115.915 403 65 352.07 65 289.246c0-61.414 48.654-111.461 109.513-113.677a3 3 0 0 1 3.11 2.998v73.986a3 3 0 0 1-2.671 2.982c-16.95 1.875-30.136 16.254-30.136 33.711 0 18.733 15.181 33.918 33.907 33.918 18.722 0 33.901-15.177 33.908-33.904m73.816 1.358q-.01.112-.012.225C285.582 349.618 237.684 397 178.723 397 119.23 397 71 348.758 71 289.246c0-57.125 44.44-103.867 100.623-107.523v68.236c-18.655 3.352-32.807 19.665-32.807 39.287 0 22.045 17.866 39.918 39.907 39.918 22.037 0 39.9-17.864 39.908-39.903V33h67.871c1.541 42.314 35.557 76.341 77.862 77.883v67.861c-26.8-.53-51.853-8.148-73.374-21.056a3 3 0 0 0-4.543 2.573z", clipRule: "evenodd" }) })
+};
+function PlatformIcon({ id, size = 24 }) {
+  const svg = PLATFORM_SVG[id];
+  if (!svg) return null;
+  return /* @__PURE__ */ jsx("span", { style: { display: "inline-block", width: size, height: size, flexShrink: 0 }, children: svg });
+}
 var POST_CATEGORIES = {
   content: { label: "\u05EA\u05D5\u05DB\u05DF", icon: "\u{1F4DD}", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", color: "#3B82F6" },
   promotion: { label: "\u05E4\u05E8\u05E1\u05D5\u05DE\u05EA", icon: "\u{1F3AF}", bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200", color: "#F43F5E" },
@@ -1914,7 +1928,7 @@ function PublishCard({ post, client, businessColor, onPublished, onClick, onDele
               className: "px-2 py-0.5 rounded font-medium flex items-center gap-1",
               style: { backgroundColor: "#d7ff00", color: "#013d19" },
               children: [
-                /* @__PURE__ */ jsx("img", { src: `./platform-${p.id}.svg`, alt: p.name, style: { width: "14px", height: "14px", objectFit: "contain" } }),
+                /* @__PURE__ */ jsx(PlatformIcon, { id: p.id, size: 14 }),
                 p.name
               ]
             },
@@ -2095,7 +2109,7 @@ function PublishDetailModal({ post, client, onClose, onPublished, onDelete }) {
               className: `py-3 px-4 rounded-lg border-2 transition flex items-center justify-between gap-2 ${visited ? "bg-emerald-50 border-emerald-300" : "bg-white border-slate-200 hover:border-slate-400 hover:shadow-sm"}`,
               children: [
                 /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2", children: [
-                  /* @__PURE__ */ jsx("img", { src: `./platform-${p.id}.svg`, alt: p.name, style: { width: "24px", height: "24px", objectFit: "contain" } }),
+                  /* @__PURE__ */ jsx(PlatformIcon, { id: p.id, size: 24 }),
                   /* @__PURE__ */ jsx("span", { className: "font-semibold text-sm text-slate-900", children: p.name })
                 ] }),
                 visited ? /* @__PURE__ */ jsx(CheckCircle, { className: "w-5 h-5 text-emerald-600" }) : /* @__PURE__ */ jsx(LinkIcon, { className: "w-4 h-4 text-slate-400" })
@@ -2811,7 +2825,7 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
                 },
                 className: `py-3 px-2 text-sm rounded-lg border transition flex items-center justify-center ${isSelected ? "font-semibold" : "bg-white border-slate-200 hover:bg-slate-50"}`,
                 style: isSelected ? { backgroundColor: "#d7ff00", borderColor: "#013d19" } : {},
-                children: /* @__PURE__ */ jsx("img", { src: `./platform-${p.id}.svg`, alt: p.name, style: { width: "32px", height: "32px", objectFit: "contain" } })
+                children: /* @__PURE__ */ jsx(PlatformIcon, { id: p.id, size: 32 })
               },
               p.id
             );
@@ -4040,15 +4054,7 @@ ${stripHtml(post.content)}`,
                           /* @__PURE__ */ jsx("div", { className: "text-xs font-medium text-slate-900 truncate leading-tight", children: displayContent || "\u05DC\u05DC\u05D0 \u05DB\u05D5\u05EA\u05E8\u05EA" }),
                           /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between mt-0.5", children: [
                             post.time && /* @__PURE__ */ jsx("span", { className: "text-[10px] text-slate-500 font-mono", children: post.time }),
-                            platformIcons && /* @__PURE__ */ jsx("div", { className: "flex items-center gap-1", children: platformIcons.map((pid, i) => /* @__PURE__ */ jsx(
-                              "img",
-                              {
-                                src: `./platform-${pid}.svg`,
-                                alt: pid,
-                                style: { width: "12px", height: "12px", objectFit: "contain" }
-                              },
-                              i
-                            )) })
+                            platformIcons && /* @__PURE__ */ jsx("div", { className: "flex items-center gap-1", children: platformIcons.map((pid, i) => /* @__PURE__ */ jsx(PlatformIcon, { id: pid, size: 12 }, i)) })
                           ] })
                         ] })
                       ]
