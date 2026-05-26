@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.10-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F517} FIX: Share links now work reliably", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.11-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F527} FIX: setUsers reference error in share link", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -567,7 +567,7 @@ function LoginScreen({ onLogin, branding }) {
 function AdminDashboard({ user, onLogout, branding, updateBranding }) {
   const [activeView, setActiveView] = useState("posts");
   const [posts, setPosts] = useState([]);
-  const [users, setUsers2] = useState([]);
+  const [users, setUsers] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [showPostModal, setShowPostModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -656,9 +656,9 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
       if (usersResult && usersResult.value) {
         try {
           const parsed = JSON.parse(usersResult.value);
-          setUsers2(Array.isArray(parsed) ? parsed : []);
+          setUsers(Array.isArray(parsed) ? parsed : []);
         } catch (e) {
-          setUsers2([]);
+          setUsers([]);
         }
       }
       if (templatesResult && templatesResult.value) {
@@ -678,7 +678,7 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
     await window.storage.set("content-posts", JSON.stringify(updated));
   };
   const saveUsers = async (updated) => {
-    setUsers2(updated);
+    setUsers(updated);
     await window.storage.set("users", JSON.stringify(updated));
   };
   const saveTemplates = async (updated) => {
@@ -2304,7 +2304,7 @@ function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, e
         const updated = users.map(
           (u) => u.username === user.username ? updatedUser : u
         );
-        setUsers(updated);
+        await saveUsers(updated);
       } catch (e) {
         console.error("Failed to save share token:", e);
         alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D9\u05E6\u05D9\u05E8\u05EA \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4\u05E9\u05D9\u05EA\u05D5\u05E3. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.");
@@ -2327,7 +2327,7 @@ function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, e
       const updated = users.map(
         (u) => u.username === shareModalUser.username ? updatedUser : u
       );
-      setUsers(updated);
+      await saveUsers(updated);
       setShareModalUser(updatedUser);
     } catch (e) {
       console.error("Failed to regenerate token:", e);
