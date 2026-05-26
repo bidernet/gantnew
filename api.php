@@ -171,8 +171,14 @@ try {
                 foreach ($rows as &$row) {
                     if ($row['platforms']) $row['platforms'] = json_decode($row['platforms'], true);
                     if ($row['clientApproval']) $row['clientApproval'] = json_decode($row['clientApproval'], true);
-                    if ($row['chatMessages']) $row['chatMessages'] = json_decode($row['chatMessages'], true);
-                    if ($row['editHistory']) $row['editHistory'] = json_decode($row['editHistory'], true);
+                    if ($row['chatMessages']) {
+                        $row['messages'] = json_decode($row['chatMessages'], true);  // map for frontend
+                        $row['chatMessages'] = $row['messages'];
+                    }
+                    if ($row['editHistory']) {
+                        $row['history'] = json_decode($row['editHistory'], true);  // map for frontend
+                        $row['editHistory'] = $row['history'];
+                    }
                     if ($row['publishedTo']) $row['publishedTo'] = json_decode($row['publishedTo'], true);
                 }
                 respond($rows);
@@ -181,8 +187,12 @@ try {
                 $id = $input['id'] ?? uniqid('post_', true);
                 $platforms = isset($input['platforms']) ? json_encode($input['platforms'], JSON_UNESCAPED_UNICODE) : null;
                 $approval = isset($input['clientApproval']) ? json_encode($input['clientApproval'], JSON_UNESCAPED_UNICODE) : null;
-                $chatMessages = isset($input['chatMessages']) ? json_encode($input['chatMessages'], JSON_UNESCAPED_UNICODE) : null;
-                $editHistory = isset($input['editHistory']) ? json_encode($input['editHistory'], JSON_UNESCAPED_UNICODE) : null;
+                // Frontend uses 'messages' but DB uses 'chatMessages' - accept both
+                $messagesInput = $input['messages'] ?? $input['chatMessages'] ?? null;
+                $chatMessages = $messagesInput !== null ? json_encode($messagesInput, JSON_UNESCAPED_UNICODE) : null;
+                // Frontend uses 'history' but DB uses 'editHistory' - accept both
+                $historyInput = $input['history'] ?? $input['editHistory'] ?? null;
+                $editHistory = $historyInput !== null ? json_encode($historyInput, JSON_UNESCAPED_UNICODE) : null;
                 $publishedTo = isset($input['publishedTo']) ? json_encode($input['publishedTo'], JSON_UNESCAPED_UNICODE) : null;
 
                 $stmt = $pdo->prepare("
@@ -392,7 +402,7 @@ try {
 
         // ============== PING (test endpoint) ==============
         case 'ping':
-            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.4.6-php']);
+            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.4.7-php']);
             break;
 
         default:

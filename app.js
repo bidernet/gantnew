@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.6-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u270F\uFE0F Client can edit posts + request changes", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.7-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F527} FIX: Client edits now sync to admin properly", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -797,6 +797,18 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
             children: [
               /* @__PURE__ */ jsx(Settings, { className: "w-4 h-4" }),
               /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05DE\u05D9\u05EA\u05D5\u05D2" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs(
+          "button",
+          {
+            onClick: loadData,
+            className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
+            title: "\u05E8\u05E2\u05E0\u05DF \u05DE\u05D4\u05E9\u05E8\u05EA",
+            children: [
+              /* @__PURE__ */ jsx("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" }) }),
+              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05E8\u05E2\u05E0\u05DF" })
             ]
           }
         ),
