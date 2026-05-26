@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.5-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F9F9} Post chat removed from admin view", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.6-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u270F\uFE0F Client can edit posts + request changes", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -1186,7 +1186,28 @@ function ClientDashboard({ user, onLogout, branding }) {
         onClose: () => setSelectedPost(null),
         onApprove: (comment) => updatePostApproval(selectedPost.id, "approved", comment),
         onReject: (comment) => updatePostApproval(selectedPost.id, "rejected", comment),
-        currentUserName: user?.name || "\u05DC\u05E7\u05D5\u05D7"
+        currentUserName: user?.name || "\u05DC\u05E7\u05D5\u05D7",
+        onEditPost: async (newContent) => {
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          const oldContent = selectedPost.content || "";
+          const updatedPost = {
+            ...selectedPost,
+            content: newContent,
+            // Edit also clears any previous rejection so admin sees the new content
+            clientApproval: null,
+            history: [...selectedPost.history || [], {
+              timestamp: now,
+              author: user?.name || "\u05DC\u05E7\u05D5\u05D7",
+              action: "\u270F\uFE0F \u05D4\u05DC\u05E7\u05D5\u05D7 \u05E2\u05E8\u05DA \u05D0\u05EA \u05EA\u05D5\u05DB\u05DF \u05D4\u05E4\u05D5\u05E1\u05D8",
+              details: `\u05DE\u05EA\u05D5\u05DB\u05DF: "${stripHtml(oldContent).substring(0, 80)}..." \u2192 "${stripHtml(newContent).substring(0, 80)}..."`
+            }]
+          };
+          const updated = posts.map((p) => p.id === selectedPost.id ? updatedPost : p);
+          setPosts(updated);
+          await window.storage.set("content-posts", JSON.stringify(updated));
+          setSelectedPost(updatedPost);
+          alert("\u05D4\u05E4\u05D5\u05E1\u05D8 \u05E2\u05D5\u05D3\u05DB\u05DF \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4! \u2713\n\u05D4\u05D0\u05D3\u05DE\u05D9\u05DF \u05D9\u05E7\u05D1\u05DC \u05D4\u05D5\u05D3\u05E2\u05D4 \u05E2\u05DC \u05D4\u05E9\u05D9\u05E0\u05D5\u05D9.");
+        }
       }
     ),
     showFinalApproval && /* @__PURE__ */ jsx(
@@ -3032,22 +3053,81 @@ function ClientPostRow({ post, onClick }) {
       ] }),
       post.title && /* @__PURE__ */ jsx("h4", { className: "font-semibold text-slate-900 mb-1", children: post.title }),
       /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600 line-clamp-2", children: stripHtml(post.content) }),
-      approval?.comment && /* @__PURE__ */ jsxs("div", { className: "mt-2 px-3 py-1.5 bg-slate-50 rounded-lg text-xs text-slate-600 border-r-2 border-slate-300", children: [
-        /* @__PURE__ */ jsx(MessageSquare, { className: "w-3 h-3 inline ml-1" }),
-        approval.comment
-      ] })
+      approval?.comment && /* @__PURE__ */ jsxs(
+        "div",
+        {
+          className: "mt-2 px-3 py-2 rounded-lg text-sm border-r-4 flex items-start gap-2",
+          style: {
+            backgroundColor: "#d7ff0033",
+            borderRightColor: "#013d19",
+            color: "#013d19"
+          },
+          children: [
+            /* @__PURE__ */ jsx(MessageSquare, { className: "w-4 h-4 mt-0.5 flex-shrink-0" }),
+            /* @__PURE__ */ jsxs("div", { children: [
+              /* @__PURE__ */ jsx("div", { className: "font-bold text-xs mb-0.5", children: "\u05D4\u05D4\u05E2\u05E8\u05D4 \u05E9\u05DC\u05DA:" }),
+              /* @__PURE__ */ jsx("div", { children: approval.comment })
+            ] })
+          ]
+        }
+      )
     ] }),
     /* @__PURE__ */ jsx("div", { className: "flex-shrink-0 text-xs text-slate-400 self-center", children: /* @__PURE__ */ jsx(ChevronLeft, { className: "w-5 h-5" }) })
   ] }) });
 }
-function ClientPostModal({ post, onClose, onApprove, onReject, currentUserName }) {
+function ClientPostModal({ post, onClose, onApprove, onReject, onEditPost, currentUserName }) {
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [actionType, setActionType] = useState(null);
   const [comment, setComment] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState("");
   const handleStartAction = (type) => {
     setActionType(type);
     setShowCommentBox(true);
     setComment(post.clientApproval?.comment || "");
+  };
+  const htmlToPlainText = (html) => {
+    if (!html) return "";
+    let text = html;
+    text = text.replace(/<\/(div|p|h[1-6]|li)>/gi, "\n");
+    text = text.replace(/<br\s*\/?>/gi, "\n");
+    text = text.replace(/&nbsp;/gi, " ");
+    text = text.replace(/&amp;/gi, "&");
+    text = text.replace(/&lt;/gi, "<");
+    text = text.replace(/&gt;/gi, ">");
+    text = text.replace(/&quot;/gi, '"');
+    text = text.replace(/&#39;/gi, "'");
+    const tmp = document.createElement("div");
+    tmp.innerHTML = text;
+    text = tmp.textContent || tmp.innerText || "";
+    text = text.split("\n").map((line) => line.trim()).join("\n");
+    text = text.replace(/\n{3,}/g, "\n\n").trim();
+    return text;
+  };
+  const plainTextToHtml = (text) => {
+    if (!text) return "";
+    const escape = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return text.split("\n").map((line) => {
+      if (line.trim() === "") return "<div><br></div>";
+      return `<div>${escape(line)}</div>`;
+    }).join("");
+  };
+  const handleStartEdit = () => {
+    setEditedContent(htmlToPlainText(post.content || ""));
+    setIsEditing(true);
+  };
+  const handleSaveEdit = () => {
+    if (!editedContent.trim()) {
+      alert("\u05D9\u05E9 \u05DC\u05D4\u05D6\u05D9\u05DF \u05EA\u05D5\u05DB\u05DF \u05DC\u05E4\u05D5\u05E1\u05D8");
+      return;
+    }
+    const html = plainTextToHtml(editedContent);
+    onEditPost(html);
+    setIsEditing(false);
+  };
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedContent("");
   };
   const handleSubmit = () => {
     if (actionType === "reject" && !comment.trim()) {
@@ -3098,23 +3178,82 @@ function ClientPostModal({ post, onClose, onApprove, onReject, currentUserName }
         ] })
       ] }),
       post.title && /* @__PURE__ */ jsx("h3", { className: "text-xl font-bold text-slate-900", children: post.title }),
-      /* @__PURE__ */ jsx("div", { className: "text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-4 border border-slate-100", dangerouslySetInnerHTML: { __html: post.content } }),
-      !showCommentBox && /* @__PURE__ */ jsxs(
-        "button",
-        {
-          onClick: () => handleStartAction("reject"),
-          className: "px-4 py-2 text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2 hover:opacity-90 transition",
-          style: {
-            backgroundColor: currentStatus === "rejected" ? "#013d19" : "#d7ff00",
-            color: currentStatus === "rejected" ? "#d7ff00" : "#013d19",
-            border: "2px solid #013d19"
-          },
-          children: [
-            /* @__PURE__ */ jsx(Edit3, { className: "w-4 h-4" }),
-            currentStatus === "rejected" ? "\u05D1\u05D9\u05E7\u05E9\u05EA \u05E9\u05D9\u05E0\u05D5\u05D9 \u2713" : "\u05D1\u05E7\u05E9 \u05E9\u05D9\u05E0\u05D5\u05D9"
-          ]
-        }
-      ),
+      isEditing ? /* @__PURE__ */ jsxs("div", { className: "space-y-3", children: [
+        /* @__PURE__ */ jsxs("label", { className: "block text-sm font-bold text-slate-800 flex items-center gap-2", children: [
+          /* @__PURE__ */ jsx(Edit3, { className: "w-4 h-4" }),
+          "\u05E2\u05E8\u05D9\u05DB\u05EA \u05EA\u05D5\u05DB\u05DF \u05D4\u05E4\u05D5\u05E1\u05D8"
+        ] }),
+        /* @__PURE__ */ jsx(
+          "textarea",
+          {
+            value: editedContent,
+            onChange: (e) => setEditedContent(e.target.value),
+            rows: 12,
+            placeholder: "\u05E2\u05E8\u05D5\u05DA \u05D0\u05EA \u05EA\u05D5\u05DB\u05DF \u05D4\u05E4\u05D5\u05E1\u05D8...",
+            className: "w-full px-4 py-3 border-2 rounded-lg focus:outline-none resize-none bg-white text-base font-normal",
+            style: { borderColor: "#013d19", direction: "rtl" },
+            autoFocus: true
+          }
+        ),
+        /* @__PURE__ */ jsxs("div", { className: "flex gap-2 justify-end", children: [
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              onClick: handleCancelEdit,
+              className: "px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300",
+              children: "\u05D1\u05D9\u05D8\u05D5\u05DC"
+            }
+          ),
+          /* @__PURE__ */ jsxs(
+            "button",
+            {
+              onClick: handleSaveEdit,
+              className: "px-5 py-2 text-sm font-bold rounded-lg shadow-sm flex items-center gap-2 hover:opacity-90",
+              style: { backgroundColor: "#d7ff00", color: "#013d19", border: "2px solid #013d19" },
+              children: [
+                /* @__PURE__ */ jsx(Save, { className: "w-4 h-4" }),
+                "\u05E9\u05DE\u05D5\u05E8 \u05E9\u05D9\u05E0\u05D5\u05D9\u05D9\u05DD"
+              ]
+            }
+          )
+        ] })
+      ] }) : /* @__PURE__ */ jsxs("div", { children: [
+        /* @__PURE__ */ jsx("div", { className: "text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-4 border border-slate-100", dangerouslySetInnerHTML: { __html: post.content } }),
+        !showCommentBox && /* @__PURE__ */ jsxs("div", { className: "flex flex-wrap gap-2 mt-3", children: [
+          onEditPost && /* @__PURE__ */ jsxs(
+            "button",
+            {
+              onClick: handleStartEdit,
+              className: "px-4 py-2 text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2 hover:opacity-90 transition",
+              style: {
+                backgroundColor: "#d7ff00",
+                color: "#013d19",
+                border: "2px solid #013d19"
+              },
+              children: [
+                /* @__PURE__ */ jsx(Edit3, { className: "w-4 h-4" }),
+                "\u05E2\u05E8\u05D5\u05DA \u05E4\u05D5\u05E1\u05D8"
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxs(
+            "button",
+            {
+              onClick: () => handleStartAction("reject"),
+              className: "px-4 py-2 text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2 hover:opacity-90 transition",
+              style: {
+                backgroundColor: currentStatus === "rejected" ? "#013d19" : "#ffffff",
+                color: currentStatus === "rejected" ? "#d7ff00" : "#013d19",
+                border: "2px solid #013d19"
+              },
+              children: [
+                /* @__PURE__ */ jsx(MessageSquare, { className: "w-4 h-4" }),
+                currentStatus === "rejected" ? "\u05D1\u05D9\u05E7\u05E9\u05EA \u05E9\u05D9\u05E0\u05D5\u05D9 \u2713" : "\u05D1\u05E7\u05E9 \u05E9\u05D9\u05E0\u05D5\u05D9"
+              ]
+            }
+          )
+        ] })
+      ] }),
       post.mediaData && /* @__PURE__ */ jsx("div", { className: "rounded-xl overflow-hidden bg-slate-100", children: post.mediaType === "image" ? /* @__PURE__ */ jsx("img", { src: post.mediaData, alt: "", className: "w-full" }) : /* @__PURE__ */ jsx("video", { src: post.mediaData, controls: true, className: "w-full" }) }),
       showCommentBox && /* @__PURE__ */ jsxs("div", { className: `border-2 rounded-lg p-4 ${actionType === "approve" ? "border-emerald-300 bg-emerald-50" : "border-rose-300 bg-rose-50"}`, children: [
         /* @__PURE__ */ jsx("label", { className: "block text-sm font-semibold text-slate-800 mb-2", children: actionType === "approve" ? "\u2713 \u05D0\u05D9\u05E9\u05D5\u05E8 \u05E4\u05D5\u05E1\u05D8 - \u05D4\u05E2\u05E8\u05D4 (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)" : "\u26A0 \u05DE\u05D4 \u05EA\u05E8\u05E6\u05D4 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D1\u05E4\u05D5\u05E1\u05D8?" }),
