@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.8-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F6E1}\uFE0F CRITICAL FIX: client edits now save correctly", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.10-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F517} FIX: Share links now work reliably", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -325,18 +325,33 @@ function ContentCalendarApp() {
       const shareMatch = hash.match(/share=([a-zA-Z0-9]+)/);
       if (shareMatch) {
         const shareToken = shareMatch[1];
+        console.log("\u{1F517} Share link detected with token:", shareToken);
         let sharedUser = users.find((u) => u.shareToken === shareToken && u.role === "client");
+        if (sharedUser) {
+          console.log("\u2713 Share user found locally:", sharedUser.businessName);
+        }
         if (!sharedUser && typeof window !== "undefined" && window.apiShareLookup) {
           try {
+            console.log("\u{1F50D} Looking up share token via API...");
             sharedUser = await window.apiShareLookup(shareToken);
+            if (sharedUser) {
+              console.log("\u2713 Share user found via API:", sharedUser.businessName);
+            }
           } catch (e) {
-            console.warn("Share token lookup failed:", e.message);
+            console.error("\u274C Share token lookup failed:", e.message);
+            setLoading(false);
+            alert("\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05E9\u05D2\u05D5\u05D9 \u05D0\u05D5 \u05DC\u05D0 \u05EA\u05E7\u05E3.\n\n\u05D0\u05E0\u05D0 \u05E4\u05E0\u05D4 \u05DC\u05DE\u05E0\u05D4\u05DC \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA \u05DC\u05E7\u05D1\u05DC\u05EA \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D7\u05D3\u05E9.");
+            return;
           }
         }
         if (sharedUser) {
           setCurrentUser(sharedUser);
           setIsShareMode(true);
           setLoading(false);
+          return;
+        } else {
+          setLoading(false);
+          alert("\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05EA\u05E7\u05E3 - \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05DC\u05E7\u05D5\u05D7 \u05E2\u05DD \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4\u05D6\u05D4.\n\n\u05D0\u05E0\u05D0 \u05E4\u05E0\u05D4 \u05DC\u05DE\u05E0\u05D4\u05DC \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA.");
           return;
         }
       }
@@ -552,7 +567,7 @@ function LoginScreen({ onLogin, branding }) {
 function AdminDashboard({ user, onLogout, branding, updateBranding }) {
   const [activeView, setActiveView] = useState("posts");
   const [posts, setPosts] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [users, setUsers2] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [showPostModal, setShowPostModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -564,10 +579,59 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPost, setSelectedPost] = useState(null);
   const [showBrandingModal, setShowBrandingModal] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     loadData();
   }, []);
+  useEffect(() => {
+    if (!loading && posts.length > 0) {
+      const autoBackup = async () => {
+        try {
+          const brandingResult = await window.storage.get("branding").catch(() => null);
+          const branding2 = brandingResult ? JSON.parse(brandingResult.value) : {};
+          const backup = {
+            version: "2.4.9",
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            type: "auto",
+            posts,
+            users,
+            branding: branding2,
+            templates
+          };
+          let backups = [];
+          try {
+            const stored = localStorage.getItem("bidernet_auto_backups");
+            if (stored) backups = JSON.parse(stored);
+            if (!Array.isArray(backups)) backups = [];
+          } catch (e) {
+            backups = [];
+          }
+          backups.unshift(backup);
+          backups = backups.slice(0, 3);
+          try {
+            localStorage.setItem("bidernet_auto_backups", JSON.stringify(backups));
+            console.log(`%c\u{1F4BE} Auto-backup saved (${posts.length} posts)`, "color: #10b981; font-weight: bold;");
+          } catch (e) {
+            console.warn("Auto-backup quota exceeded - removing media to save space");
+            const lightBackup = {
+              ...backup,
+              posts: backup.posts.map((p) => ({ ...p, mediaData: p.mediaData ? "[REMOVED-TOO-LARGE]" : null }))
+            };
+            backups[0] = lightBackup;
+            try {
+              localStorage.setItem("bidernet_auto_backups", JSON.stringify(backups));
+            } catch (e2) {
+              console.error("Auto-backup failed even without media:", e2);
+            }
+          }
+        } catch (e) {
+          console.error("Auto-backup error:", e);
+        }
+      };
+      autoBackup();
+    }
+  }, [loading]);
   useEffect(() => {
     const handler = () => setActiveView("publish");
     window.addEventListener("switchToPublish", handler);
@@ -592,9 +656,9 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
       if (usersResult && usersResult.value) {
         try {
           const parsed = JSON.parse(usersResult.value);
-          setUsers(Array.isArray(parsed) ? parsed : []);
+          setUsers2(Array.isArray(parsed) ? parsed : []);
         } catch (e) {
-          setUsers([]);
+          setUsers2([]);
         }
       }
       if (templatesResult && templatesResult.value) {
@@ -614,7 +678,7 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
     await window.storage.set("content-posts", JSON.stringify(updated));
   };
   const saveUsers = async (updated) => {
-    setUsers(updated);
+    setUsers2(updated);
     await window.storage.set("users", JSON.stringify(updated));
   };
   const saveTemplates = async (updated) => {
@@ -815,6 +879,18 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
         /* @__PURE__ */ jsxs(
           "button",
           {
+            onClick: () => setShowBackupModal(true),
+            className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
+            title: "\u05D2\u05D9\u05D1\u05D5\u05D9 \u05D5\u05E9\u05D7\u05D6\u05D5\u05E8",
+            children: [
+              /* @__PURE__ */ jsx("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" }) }),
+              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05D2\u05D9\u05D1\u05D5\u05D9" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs(
+          "button",
+          {
             onClick: onLogout,
             className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
             title: "\u05D9\u05E6\u05D9\u05D0\u05D4",
@@ -915,7 +991,21 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
         )
       ] }),
       /* @__PURE__ */ jsx("div", { className: "p-4 sm:p-6", children: /* @__PURE__ */ jsx(BrandingSettings, { branding, updateBranding }) })
-    ] }) })
+    ] }) }),
+    showBackupModal && /* @__PURE__ */ jsx(
+      BackupRestoreModal,
+      {
+        posts,
+        users,
+        templates,
+        branding,
+        onClose: () => setShowBackupModal(false),
+        onRestore: async () => {
+          setShowBackupModal(false);
+          await loadData();
+        }
+      }
+    )
   ] });
 }
 function ClientDashboard({ user, onLogout, branding }) {
@@ -2203,22 +2293,46 @@ function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, e
     let updatedUser = user;
     if (!user.shareToken) {
       const token = generateShareToken();
-      const updated = users.map(
-        (u) => u.username === user.username ? { ...u, shareToken: token } : u
-      );
-      await saveUsers(updated);
       updatedUser = { ...user, shareToken: token };
+      try {
+        const res = await fetch("/api.php?action=users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedUser)
+        });
+        if (!res.ok) throw new Error("Save failed");
+        const updated = users.map(
+          (u) => u.username === user.username ? updatedUser : u
+        );
+        setUsers(updated);
+      } catch (e) {
+        console.error("Failed to save share token:", e);
+        alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D9\u05E6\u05D9\u05E8\u05EA \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4\u05E9\u05D9\u05EA\u05D5\u05E3. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.");
+        return;
+      }
     }
     setShareModalUser(updatedUser);
   };
   const handleRegenerateToken = async () => {
     if (!confirm("\u05D4\u05D0\u05DD \u05DC\u05D9\u05E6\u05D5\u05E8 \u05DC\u05D9\u05E0\u05E7 \u05D7\u05D3\u05E9? \u05D4\u05DC\u05D9\u05E0\u05E7 \u05D4\u05D9\u05E9\u05DF \u05D9\u05E4\u05E1\u05D9\u05E7 \u05DC\u05E2\u05D1\u05D5\u05D3.")) return;
     const newToken = generateShareToken();
-    const updated = users.map(
-      (u) => u.username === shareModalUser.username ? { ...u, shareToken: newToken } : u
-    );
-    await saveUsers(updated);
-    setShareModalUser({ ...shareModalUser, shareToken: newToken });
+    const updatedUser = { ...shareModalUser, shareToken: newToken };
+    try {
+      const res = await fetch("/api.php?action=users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedUser)
+      });
+      if (!res.ok) throw new Error("Save failed");
+      const updated = users.map(
+        (u) => u.username === shareModalUser.username ? updatedUser : u
+      );
+      setUsers(updated);
+      setShareModalUser(updatedUser);
+    } catch (e) {
+      console.error("Failed to regenerate token:", e);
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D9\u05E6\u05D9\u05E8\u05EA \u05DC\u05D9\u05E0\u05E7 \u05D7\u05D3\u05E9. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.");
+    }
   };
   const filteredUsers = users.filter((u) => u.role === filterRole);
   const adminUsers = users.filter((u) => u.role === "admin");
@@ -5100,6 +5214,448 @@ function ToolButton({ onClick, title, children }) {
 }
 function Divider() {
   return /* @__PURE__ */ jsx("div", { className: "w-px h-5 bg-slate-300 mx-0.5" });
+}
+function BackupRestoreModal({ posts, users, templates, branding, onClose, onRestore }) {
+  const [mode, setMode] = useState("menu");
+  const [restoreData, setRestoreData] = useState(null);
+  const [restoreMode, setRestoreMode] = useState("merge");
+  const [autoBackups, setAutoBackups] = useState([]);
+  const [working, setWorking] = useState(false);
+  const fileInputRef = useRef(null);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("bidernet_auto_backups");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) setAutoBackups(parsed);
+      }
+    } catch (e) {
+    }
+  }, []);
+  const handleDownloadBackup = (includeMedia = true) => {
+    try {
+      const exportPosts = includeMedia ? posts : posts.map((p) => ({ ...p, mediaData: p.mediaData ? "[MEDIA-EXCLUDED]" : null }));
+      const backup = {
+        version: "2.4.9",
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        type: "manual",
+        includesMedia: includeMedia,
+        stats: {
+          posts: posts.length,
+          users: users.length,
+          templates: templates.length
+        },
+        data: {
+          posts: exportPosts,
+          users,
+          branding,
+          templates
+        }
+      };
+      const json = JSON.stringify(backup, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace(/[T:]/g, "-");
+      a.href = url;
+      a.download = `bidernet-backup-${dateStr}${includeMedia ? "" : "-no-media"}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      alert(`\u2713 \u05D4\u05D2\u05D9\u05D1\u05D5\u05D9 \u05D4\u05D5\u05E8\u05D3 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4!
+
+\u{1F4CA} \u05DB\u05D5\u05DC\u05DC:
+- ${posts.length} \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD
+- ${users.length} \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD
+- ${templates.length} \u05EA\u05D1\u05E0\u05D9\u05D5\u05EA${includeMedia ? "\n- \u05DB\u05DC \u05E7\u05D1\u05E6\u05D9 \u05D4\u05DE\u05D3\u05D9\u05D4" : "\n- \u26A0\uFE0F \u05DC\u05DC\u05D0 \u05E7\u05D1\u05E6\u05D9 \u05DE\u05D3\u05D9\u05D4"}`);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D9\u05E6\u05D9\u05E8\u05EA \u05D4\u05D2\u05D9\u05D1\u05D5\u05D9: " + e.message);
+    }
+  };
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target.result);
+        if (!parsed.data || !parsed.timestamp) {
+          alert("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D0\u05D9\u05E0\u05D5 \u05D1\u05E4\u05D5\u05E8\u05DE\u05D8 \u05D2\u05D9\u05D1\u05D5\u05D9 \u05EA\u05E7\u05D9\u05DF");
+          return;
+        }
+        setRestoreData(parsed);
+        setMode("restore-preview");
+      } catch (e2) {
+        alert("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D0\u05D9\u05E0\u05D5 JSON \u05EA\u05E7\u05D9\u05DF: " + e2.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  const handleLoadAutoBackup = (backup) => {
+    setRestoreData({
+      version: backup.version,
+      timestamp: backup.timestamp,
+      type: backup.type,
+      data: {
+        posts: backup.posts || [],
+        users: backup.users || [],
+        branding: backup.branding || {},
+        templates: backup.templates || []
+      }
+    });
+    setMode("restore-preview");
+  };
+  const handleRestore = async () => {
+    if (!restoreData) return;
+    const backupPosts = restoreData.data.posts || [];
+    const backupUsers = restoreData.data.users || [];
+    const backupTemplates = restoreData.data.templates || [];
+    const backupBranding = restoreData.data.branding || {};
+    let confirmMsg = "";
+    if (restoreMode === "replace") {
+      confirmMsg = `\u26A0\uFE0F \u05D0\u05D6\u05D4\u05E8\u05D4!
+
+\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D6\u05D5 \u05EA\u05DE\u05D7\u05E7 \u05D0\u05EA \u05DB\u05DC \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D4\u05E7\u05D9\u05D9\u05DE\u05D9\u05DD \u05D5\u05EA\u05D7\u05DC\u05D9\u05E3 \u05D0\u05D5\u05EA\u05DD \u05D1\u05D2\u05D9\u05D1\u05D5\u05D9.
+
+\u{1F4CA} \u05D4\u05D2\u05D9\u05D1\u05D5\u05D9 \u05DB\u05D5\u05DC\u05DC:
+- ${backupPosts.length} \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD
+- ${backupUsers.length} \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD
+- ${backupTemplates.length} \u05EA\u05D1\u05E0\u05D9\u05D5\u05EA
+
+\u274C \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D4\u05E0\u05D5\u05DB\u05D7\u05D9\u05D9\u05DD (${posts.length} \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD, ${users.length} \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD) \u05D9\u05D9\u05DE\u05D7\u05E7\u05D5!
+
+\u05D4\u05D0\u05DD \u05DC\u05D4\u05DE\u05E9\u05D9\u05DA?`;
+    } else {
+      const newPostIds = new Set(backupPosts.map((p) => p.id));
+      const existingPostIds = new Set(posts.map((p) => p.id));
+      const toAdd = backupPosts.filter((p) => !existingPostIds.has(p.id));
+      confirmMsg = `\u{1F500} \u05DE\u05D9\u05D6\u05D5\u05D2 \u05D2\u05D9\u05D1\u05D5\u05D9
+
+\u05E8\u05E7 \u05E4\u05E8\u05D9\u05D8\u05D9\u05DD \u05D7\u05E1\u05E8\u05D9\u05DD \u05D9\u05EA\u05D5\u05D5\u05E1\u05E4\u05D5 - \u05E4\u05E8\u05D9\u05D8\u05D9\u05DD \u05E7\u05D9\u05D9\u05DE\u05D9\u05DD \u05DC\u05D0 \u05D9\u05E2\u05D5\u05D3\u05DB\u05E0\u05D5.
+
+\u{1F4CA} \u05D9\u05D9\u05EA\u05D5\u05D5\u05E1\u05E4\u05D5:
+- ${toAdd.length} \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD \u05D7\u05D3\u05E9\u05D9\u05DD (\u05DE\u05EA\u05D5\u05DA ${backupPosts.length} \u05D1\u05D2\u05D9\u05D1\u05D5\u05D9)
+
+\u05D4\u05D0\u05DD \u05DC\u05D4\u05DE\u05E9\u05D9\u05DA?`;
+    }
+    if (!confirm(confirmMsg)) return;
+    setWorking(true);
+    try {
+      if (restoreMode === "replace") {
+        for (const p of posts) {
+          try {
+            await fetch(`/api.php?action=posts&id=${encodeURIComponent(p.id)}`, { method: "DELETE" });
+          } catch (e) {
+            console.warn("Delete failed:", e);
+          }
+        }
+        for (const u of users) {
+          try {
+            await fetch(`/api.php?action=users&id=${encodeURIComponent(u.id)}`, { method: "DELETE" });
+          } catch (e) {
+            console.warn("Delete failed:", e);
+          }
+        }
+        for (const t of templates) {
+          try {
+            await fetch(`/api.php?action=templates&id=${encodeURIComponent(t.id)}`, { method: "DELETE" });
+          } catch (e) {
+            console.warn("Delete failed:", e);
+          }
+        }
+      }
+      let savedPosts = 0;
+      const existingIds = restoreMode === "merge" ? new Set(posts.map((p) => p.id)) : /* @__PURE__ */ new Set();
+      for (const post of backupPosts) {
+        if (restoreMode === "merge" && existingIds.has(post.id)) continue;
+        try {
+          await fetch("/api.php?action=posts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(post)
+          });
+          savedPosts++;
+        } catch (e) {
+          console.warn("Post upsert failed:", e);
+        }
+      }
+      let savedUsers = 0;
+      const existingUserIds = restoreMode === "merge" ? new Set(users.map((u) => u.id)) : /* @__PURE__ */ new Set();
+      for (const user of backupUsers) {
+        if (restoreMode === "merge" && existingUserIds.has(user.id)) continue;
+        try {
+          await fetch("/api.php?action=users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(user)
+          });
+          savedUsers++;
+        } catch (e) {
+          console.warn("User upsert failed:", e);
+        }
+      }
+      let savedTemplates = 0;
+      const existingTplIds = restoreMode === "merge" ? new Set(templates.map((t) => t.id)) : /* @__PURE__ */ new Set();
+      for (const tpl of backupTemplates) {
+        if (restoreMode === "merge" && existingTplIds.has(tpl.id)) continue;
+        try {
+          await fetch("/api.php?action=templates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(tpl)
+          });
+          savedTemplates++;
+        } catch (e) {
+          console.warn("Template upsert failed:", e);
+        }
+      }
+      if (restoreMode === "replace" && backupBranding && Object.keys(backupBranding).length > 0) {
+        try {
+          await fetch("/api.php?action=branding", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(backupBranding)
+          });
+        } catch (e) {
+          console.warn("Branding restore failed:", e);
+        }
+      }
+      alert(`\u2705 \u05D4\u05E9\u05D7\u05D6\u05D5\u05E8 \u05D4\u05D5\u05E9\u05DC\u05DD \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4!
+
+\u{1F4CA} \u05E9\u05D5\u05D7\u05D6\u05E8\u05D5:
+- ${savedPosts} \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD
+- ${savedUsers} \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD
+- ${savedTemplates} \u05EA\u05D1\u05E0\u05D9\u05D5\u05EA
+
+\u05D4\u05DE\u05E1\u05DA \u05D9\u05EA\u05E8\u05E2\u05E0\u05DF \u05E2\u05DD \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D4\u05D7\u05D3\u05E9\u05D9\u05DD.`);
+      await onRestore();
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05D7\u05D6\u05D5\u05E8: " + e.message);
+    } finally {
+      setWorking(false);
+    }
+  };
+  return /* @__PURE__ */ jsx("div", { className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4", onClick: onClose, children: /* @__PURE__ */ jsxs("div", { className: "bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto", onClick: (e) => e.stopPropagation(), children: [
+    /* @__PURE__ */ jsxs("div", { className: "sticky top-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxs("h2", { className: "text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2", children: [
+        /* @__PURE__ */ jsx("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" }) }),
+        "\u05D2\u05D9\u05D1\u05D5\u05D9 \u05D5\u05E9\u05D7\u05D6\u05D5\u05E8"
+      ] }),
+      /* @__PURE__ */ jsx("button", { onClick: onClose, className: "p-1.5 hover:bg-slate-100 rounded-lg transition", children: /* @__PURE__ */ jsx(X, { className: "w-5 h-5 text-slate-600" }) })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "p-4 sm:p-6 space-y-6", children: [
+      mode === "menu" && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsxs("div", { className: "bg-slate-50 rounded-lg p-4 border border-slate-200", children: [
+          /* @__PURE__ */ jsx("h3", { className: "font-bold text-slate-900 mb-2 text-sm", children: "\u{1F4CA} \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D4\u05E0\u05D5\u05DB\u05D7\u05D9\u05D9\u05DD \u05D1\u05DE\u05E2\u05E8\u05DB\u05EA:" }),
+          /* @__PURE__ */ jsxs("div", { className: "grid grid-cols-3 gap-2 text-sm", children: [
+            /* @__PURE__ */ jsxs("div", { children: [
+              /* @__PURE__ */ jsx("span", { className: "font-bold", style: { color: "#013d19" }, children: posts.length }),
+              " \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD"
+            ] }),
+            /* @__PURE__ */ jsxs("div", { children: [
+              /* @__PURE__ */ jsx("span", { className: "font-bold", style: { color: "#013d19" }, children: users.length }),
+              " \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD"
+            ] }),
+            /* @__PURE__ */ jsxs("div", { children: [
+              /* @__PURE__ */ jsx("span", { className: "font-bold", style: { color: "#013d19" }, children: templates.length }),
+              " \u05EA\u05D1\u05E0\u05D9\u05D5\u05EA"
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "border-2 rounded-xl p-4 space-y-3", style: { borderColor: "#013d19" }, children: [
+          /* @__PURE__ */ jsxs("h3", { className: "font-bold text-lg flex items-center gap-2", style: { color: "#013d19" }, children: [
+            /* @__PURE__ */ jsx(Download, { className: "w-5 h-5" }),
+            "\u05D2\u05D9\u05D1\u05D5\u05D9 - \u05D4\u05D5\u05E8\u05D3\u05EA \u05DB\u05DC \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD"
+          ] }),
+          /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600", children: "\u05E9\u05DE\u05D5\u05E8 \u05E2\u05D5\u05EA\u05E7 \u05E9\u05DC \u05DB\u05DC \u05D4\u05DE\u05D9\u05D3\u05E2 \u05D1\u05DE\u05D7\u05E9\u05D1. \u05D1\u05DE\u05E7\u05E8\u05D4 \u05E9\u05DC \u05D1\u05E2\u05D9\u05D4 \u05EA\u05D5\u05DB\u05DC \u05DC\u05E9\u05D7\u05D6\u05E8 \u05D0\u05EA \u05D4\u05DB\u05DC." }),
+          /* @__PURE__ */ jsxs("div", { className: "flex flex-wrap gap-2", children: [
+            /* @__PURE__ */ jsxs(
+              "button",
+              {
+                onClick: () => handleDownloadBackup(true),
+                className: "px-4 py-2 text-sm font-bold rounded-lg shadow-sm hover:opacity-90 transition flex items-center gap-2",
+                style: { backgroundColor: "#d7ff00", color: "#013d19", border: "2px solid #013d19" },
+                children: [
+                  /* @__PURE__ */ jsx(Download, { className: "w-4 h-4" }),
+                  "\u05D2\u05D9\u05D1\u05D5\u05D9 \u05DE\u05DC\u05D0 (\u05DB\u05D5\u05DC\u05DC \u05DE\u05D3\u05D9\u05D4)"
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxs(
+              "button",
+              {
+                onClick: () => handleDownloadBackup(false),
+                className: "px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition flex items-center gap-2",
+                children: [
+                  /* @__PURE__ */ jsx(Download, { className: "w-4 h-4" }),
+                  "\u05D2\u05D9\u05D1\u05D5\u05D9 \u05E7\u05D8\u05DF (\u05DC\u05DC\u05D0 \u05DE\u05D3\u05D9\u05D4)"
+                ]
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-500", children: "\u{1F4A1} \u05D2\u05D9\u05D1\u05D5\u05D9 \u05DE\u05DC\u05D0 \u05D9\u05DB\u05D5\u05DC \u05DC\u05D4\u05D9\u05D5\u05EA \u05D2\u05D3\u05D5\u05DC (\u05EA\u05DE\u05D5\u05E0\u05D5\u05EA \u05D1-Base64). \u05D2\u05D9\u05D1\u05D5\u05D9 \u05E7\u05D8\u05DF \u05DE\u05D4\u05D9\u05E8 \u05D9\u05D5\u05EA\u05E8 \u05D5\u05DC\u05D0 \u05DB\u05D5\u05DC\u05DC \u05E7\u05D1\u05E6\u05D9 \u05DE\u05D3\u05D9\u05D4." })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "border-2 border-slate-200 rounded-xl p-4 space-y-3", children: [
+          /* @__PURE__ */ jsxs("h3", { className: "font-bold text-lg flex items-center gap-2 text-slate-800", children: [
+            /* @__PURE__ */ jsx(Upload, { className: "w-5 h-5" }),
+            "\u05E9\u05D7\u05D6\u05D5\u05E8 \u05DE\u05E7\u05D5\u05D1\u05E5"
+          ] }),
+          /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600", children: "\u05D4\u05E2\u05DC\u05D4 \u05E7\u05D5\u05D1\u05E5 \u05D2\u05D9\u05D1\u05D5\u05D9 \u05E9\u05D4\u05D5\u05E8\u05D3\u05EA \u05D1\u05E2\u05D1\u05E8." }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              ref: fileInputRef,
+              type: "file",
+              accept: ".json,application/json",
+              onChange: handleFileUpload,
+              className: "hidden"
+            }
+          ),
+          /* @__PURE__ */ jsxs(
+            "button",
+            {
+              onClick: () => fileInputRef.current?.click(),
+              className: "px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition flex items-center gap-2",
+              children: [
+                /* @__PURE__ */ jsx(Upload, { className: "w-4 h-4" }),
+                "\u05D1\u05D7\u05E8 \u05E7\u05D5\u05D1\u05E5 \u05D2\u05D9\u05D1\u05D5\u05D9..."
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "border-2 border-amber-200 bg-amber-50 rounded-xl p-4 space-y-3", children: [
+          /* @__PURE__ */ jsxs("h3", { className: "font-bold text-lg flex items-center gap-2 text-amber-900", children: [
+            /* @__PURE__ */ jsx(Clock, { className: "w-5 h-5" }),
+            "\u05D2\u05D9\u05D1\u05D5\u05D9\u05D9\u05DD \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05D9\u05DD (",
+            autoBackups.length,
+            ")"
+          ] }),
+          /* @__PURE__ */ jsx("p", { className: "text-sm text-amber-800", children: "\u05D4\u05DE\u05E2\u05E8\u05DB\u05EA \u05E9\u05D5\u05DE\u05E8\u05EA \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA 3 \u05D2\u05D9\u05D1\u05D5\u05D9\u05D9\u05DD \u05D0\u05D7\u05E8\u05D5\u05E0\u05D9\u05DD \u05D1\u05D3\u05E4\u05D3\u05E4\u05DF \u05E9\u05DC\u05DA." }),
+          autoBackups.length === 0 ? /* @__PURE__ */ jsx("p", { className: "text-sm text-amber-700 italic", children: "\u05E2\u05D3\u05D9\u05D9\u05DF \u05D0\u05D9\u05DF \u05D2\u05D9\u05D1\u05D5\u05D9\u05D9\u05DD \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05D9\u05DD. \u05D9\u05D9\u05D5\u05D5\u05E6\u05E8\u05D5 \u05D1\u05DB\u05E0\u05D9\u05E1\u05D4 \u05D4\u05D1\u05D0\u05D4." }) : /* @__PURE__ */ jsx("div", { className: "space-y-2", children: autoBackups.map((backup, idx) => {
+            const date = new Date(backup.timestamp);
+            const dateStr = date.toLocaleString("he-IL");
+            return /* @__PURE__ */ jsxs("div", { className: "bg-white rounded-lg p-3 border border-amber-200 flex items-center justify-between gap-2", children: [
+              /* @__PURE__ */ jsxs("div", { className: "text-sm", children: [
+                /* @__PURE__ */ jsx("div", { className: "font-semibold text-slate-900", children: dateStr }),
+                /* @__PURE__ */ jsxs("div", { className: "text-xs text-slate-500", children: [
+                  (backup.posts || []).length,
+                  " \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD \xB7 ",
+                  (backup.users || []).length,
+                  " \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD"
+                ] })
+              ] }),
+              /* @__PURE__ */ jsx(
+                "button",
+                {
+                  onClick: () => handleLoadAutoBackup(backup),
+                  className: "px-3 py-1.5 text-xs font-bold rounded-lg hover:opacity-90",
+                  style: { backgroundColor: "#d7ff00", color: "#013d19", border: "2px solid #013d19" },
+                  children: "\u05E9\u05D7\u05D6\u05E8"
+                }
+              )
+            ] }, idx);
+          }) })
+        ] })
+      ] }),
+      mode === "restore-preview" && restoreData && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            onClick: () => {
+              setMode("menu");
+              setRestoreData(null);
+            },
+            className: "text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1",
+            children: "\u2190 \u05D7\u05D6\u05D5\u05E8"
+          }
+        ),
+        /* @__PURE__ */ jsxs("div", { className: "bg-blue-50 border border-blue-200 rounded-lg p-4", children: [
+          /* @__PURE__ */ jsx("h3", { className: "font-bold text-blue-900 mb-2", children: "\u{1F4CB} \u05E4\u05E8\u05D8\u05D9 \u05D4\u05D2\u05D9\u05D1\u05D5\u05D9:" }),
+          /* @__PURE__ */ jsxs("div", { className: "text-sm space-y-1 text-blue-800", children: [
+            /* @__PURE__ */ jsxs("div", { children: [
+              "\u{1F4C5} \u05EA\u05D0\u05E8\u05D9\u05DA: ",
+              new Date(restoreData.timestamp).toLocaleString("he-IL")
+            ] }),
+            /* @__PURE__ */ jsxs("div", { children: [
+              "\u{1F3F7}\uFE0F \u05D2\u05E8\u05E1\u05D4: ",
+              restoreData.version || "\u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2"
+            ] }),
+            /* @__PURE__ */ jsx("div", { children: "\u{1F4CA} \u05EA\u05D5\u05DB\u05DF:" }),
+            /* @__PURE__ */ jsxs("ul", { className: "list-disc list-inside mr-4", children: [
+              /* @__PURE__ */ jsxs("li", { children: [
+                (restoreData.data.posts || []).length,
+                " \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD"
+              ] }),
+              /* @__PURE__ */ jsxs("li", { children: [
+                (restoreData.data.users || []).length,
+                " \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD"
+              ] }),
+              /* @__PURE__ */ jsxs("li", { children: [
+                (restoreData.data.templates || []).length,
+                " \u05EA\u05D1\u05E0\u05D9\u05D5\u05EA"
+              ] })
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "space-y-3", children: [
+          /* @__PURE__ */ jsx("h3", { className: "font-bold text-slate-900", children: "\u05D0\u05D9\u05DA \u05DC\u05E9\u05D7\u05D6\u05E8?" }),
+          /* @__PURE__ */ jsx(
+            "label",
+            {
+              className: "block border-2 rounded-xl p-4 cursor-pointer hover:bg-slate-50 transition",
+              style: { borderColor: restoreMode === "merge" ? "#013d19" : "#e2e8f0", backgroundColor: restoreMode === "merge" ? "#d7ff0011" : "white" },
+              children: /* @__PURE__ */ jsxs("div", { className: "flex items-start gap-3", children: [
+                /* @__PURE__ */ jsx(
+                  "input",
+                  {
+                    type: "radio",
+                    checked: restoreMode === "merge",
+                    onChange: () => setRestoreMode("merge"),
+                    className: "mt-1"
+                  }
+                ),
+                /* @__PURE__ */ jsxs("div", { children: [
+                  /* @__PURE__ */ jsx("div", { className: "font-bold text-slate-900", children: "\u{1F500} \u05DE\u05D9\u05D6\u05D5\u05D2 (\u05DE\u05D5\u05DE\u05DC\u05E5!)" }),
+                  /* @__PURE__ */ jsx("div", { className: "text-sm text-slate-600 mt-1", children: "\u05DE\u05D5\u05E1\u05D9\u05E3 \u05E8\u05E7 \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD \u05E9\u05D7\u05E1\u05E8\u05D9\u05DD. \u05DC\u05D0 \u05D3\u05D5\u05E8\u05E1 \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05E7\u05D9\u05D9\u05DE\u05D9\u05DD." })
+                ] })
+              ] })
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "label",
+            {
+              className: "block border-2 rounded-xl p-4 cursor-pointer hover:bg-slate-50 transition",
+              style: { borderColor: restoreMode === "replace" ? "#dc2626" : "#e2e8f0", backgroundColor: restoreMode === "replace" ? "#fef2f2" : "white" },
+              children: /* @__PURE__ */ jsxs("div", { className: "flex items-start gap-3", children: [
+                /* @__PURE__ */ jsx(
+                  "input",
+                  {
+                    type: "radio",
+                    checked: restoreMode === "replace",
+                    onChange: () => setRestoreMode("replace"),
+                    className: "mt-1"
+                  }
+                ),
+                /* @__PURE__ */ jsxs("div", { children: [
+                  /* @__PURE__ */ jsx("div", { className: "font-bold text-red-700", children: "\u26A0\uFE0F \u05D4\u05D7\u05DC\u05E4\u05D4 \u05DE\u05DC\u05D0\u05D4" }),
+                  /* @__PURE__ */ jsx("div", { className: "text-sm text-red-600 mt-1", children: "\u05DE\u05D5\u05D7\u05E7 \u05D0\u05EA \u05DB\u05DC \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D4\u05E7\u05D9\u05D9\u05DE\u05D9\u05DD \u05D5\u05DE\u05D7\u05DC\u05D9\u05E3 \u05D1\u05D2\u05D9\u05D1\u05D5\u05D9. \u05E9\u05D9\u05DE\u05D5\u05E9 \u05D1\u05D6\u05D4\u05D9\u05E8\u05D5\u05EA!" })
+                ] })
+              ] })
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            onClick: handleRestore,
+            disabled: working,
+            className: "w-full py-3 text-base font-bold rounded-xl shadow-sm hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2",
+            style: { backgroundColor: restoreMode === "replace" ? "#dc2626" : "#d7ff00", color: restoreMode === "replace" ? "white" : "#013d19", border: restoreMode === "replace" ? "none" : "2px solid #013d19" },
+            children: working ? "\u05DE\u05E9\u05D7\u05D6\u05E8... \u23F3" : restoreMode === "replace" ? "\u26A0\uFE0F \u05D0\u05D9\u05E9\u05D5\u05E8 \u05D4\u05D7\u05DC\u05E4\u05D4 \u05DE\u05DC\u05D0\u05D4" : "\u2713 \u05D0\u05D9\u05E9\u05D5\u05E8 \u05E9\u05D7\u05D6\u05D5\u05E8 (\u05DE\u05D9\u05D6\u05D5\u05D2)"
+          }
+        )
+      ] })
+    ] })
+  ] }) });
 }
 function stripHtml(html) {
   if (!html) return "";
