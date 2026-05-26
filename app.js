@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.7-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F527} FIX: Client edits now sync to admin properly", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.8-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F6E1}\uFE0F CRITICAL FIX: client edits now save correctly", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -959,6 +959,7 @@ function ClientDashboard({ user, onLogout, branding }) {
   const updatePostApproval = async (postId, approval, comment = "") => {
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const post = posts.find((p) => p.id === postId);
+    let updatedPost = null;
     const updated = posts.map((p) => {
       if (p.id === postId) {
         const historyEntry = {
@@ -967,7 +968,7 @@ function ClientDashboard({ user, onLogout, branding }) {
           action: approval === "approved" ? "\u2713 \u05D0\u05D9\u05E9\u05E8 \u05E4\u05D5\u05E1\u05D8" : "\u26A0 \u05D1\u05D9\u05E7\u05E9 \u05E9\u05D9\u05E0\u05D5\u05D9",
           details: comment || ""
         };
-        return {
+        updatedPost = {
           ...p,
           clientApproval: {
             status: approval,
@@ -977,10 +978,25 @@ function ClientDashboard({ user, onLogout, branding }) {
           },
           history: [...p.history || [], historyEntry]
         };
+        return updatedPost;
       }
       return p;
     });
-    await savePosts(updated);
+    if (updatedPost) {
+      try {
+        const res = await fetch("/api.php?action=posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedPost)
+        });
+        if (!res.ok) throw new Error("Save failed: " + res.status);
+      } catch (e) {
+        console.error("Update approval failed:", e);
+        alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DE\u05D9\u05E8\u05D4. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.");
+        return;
+      }
+    }
+    setPosts(updated);
     setSelectedPost(updated.find((p) => p.id === postId));
     if (post) {
       sendNotification(approval === "approved" ? "post_approved" : "post_rejected", {
@@ -1214,11 +1230,21 @@ function ClientDashboard({ user, onLogout, branding }) {
               details: `\u05DE\u05EA\u05D5\u05DB\u05DF: "${stripHtml(oldContent).substring(0, 80)}..." \u2192 "${stripHtml(newContent).substring(0, 80)}..."`
             }]
           };
-          const updated = posts.map((p) => p.id === selectedPost.id ? updatedPost : p);
-          setPosts(updated);
-          await window.storage.set("content-posts", JSON.stringify(updated));
-          setSelectedPost(updatedPost);
-          alert("\u05D4\u05E4\u05D5\u05E1\u05D8 \u05E2\u05D5\u05D3\u05DB\u05DF \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4! \u2713\n\u05D4\u05D0\u05D3\u05DE\u05D9\u05DF \u05D9\u05E7\u05D1\u05DC \u05D4\u05D5\u05D3\u05E2\u05D4 \u05E2\u05DC \u05D4\u05E9\u05D9\u05E0\u05D5\u05D9.");
+          try {
+            const res = await fetch("/api.php?action=posts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updatedPost)
+            });
+            if (!res.ok) throw new Error("Save failed: " + res.status);
+            const updated = posts.map((p) => p.id === selectedPost.id ? updatedPost : p);
+            setPosts(updated);
+            setSelectedPost(updatedPost);
+            alert("\u05D4\u05E4\u05D5\u05E1\u05D8 \u05E2\u05D5\u05D3\u05DB\u05DF \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4! \u2713\n\u05D4\u05D0\u05D3\u05DE\u05D9\u05DF \u05D9\u05E7\u05D1\u05DC \u05D4\u05D5\u05D3\u05E2\u05D4 \u05E2\u05DC \u05D4\u05E9\u05D9\u05E0\u05D5\u05D9.");
+          } catch (e) {
+            console.error("Edit post failed:", e);
+            alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DE\u05D9\u05E8\u05EA \u05D4\u05E4\u05D5\u05E1\u05D8. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1 \u05D0\u05D5 \u05E4\u05E0\u05D4 \u05DC\u05EA\u05DE\u05D9\u05DB\u05D4.");
+          }
         }
       }
     ),
