@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.6.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F3A8} New UI: Sidebar navigation + thin top bar", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.6.1-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F3A8} Sidebar UI - cleaner logo display", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -824,24 +824,24 @@ ${errors.slice(0, 3).join("\n")}`);
         className: `fixed top-0 right-0 h-full w-64 bg-white border-l border-slate-200 z-50 transform transition-transform lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`,
         children: /* @__PURE__ */ jsxs("div", { className: "flex flex-col h-full", children: [
           /* @__PURE__ */ jsxs("div", { className: "px-5 py-5 border-b border-slate-200 flex items-center justify-between", children: [
-            /* @__PURE__ */ jsxs(
+            /* @__PURE__ */ jsx(
               "button",
               {
                 onClick: () => {
                   setActiveView("posts");
                   setSidebarOpen(false);
                 },
-                className: "flex items-center gap-3 hover:opacity-80 transition",
+                className: "flex items-center gap-3 hover:opacity-80 transition flex-1",
                 title: "\u05D7\u05D6\u05E8\u05D4 \u05DC\u05E8\u05D0\u05E9\u05D9",
-                children: [
-                  branding.logoData ? /* @__PURE__ */ jsx(
-                    "img",
-                    {
-                      src: branding.logoData,
-                      alt: branding.companyName,
-                      className: "h-10 w-auto object-contain"
-                    }
-                  ) : /* @__PURE__ */ jsx(
+                children: branding.logoData ? /* @__PURE__ */ jsx(
+                  "img",
+                  {
+                    src: branding.logoData,
+                    alt: branding.companyName,
+                    className: "h-12 w-auto object-contain"
+                  }
+                ) : /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-3", children: [
+                  /* @__PURE__ */ jsx(
                     "div",
                     {
                       className: "w-10 h-10 rounded-xl flex items-center justify-center",
@@ -853,7 +853,7 @@ ${errors.slice(0, 3).join("\n")}`);
                     /* @__PURE__ */ jsx("div", { className: "font-bold text-slate-900 text-sm leading-tight", children: branding.companyName }),
                     /* @__PURE__ */ jsx("div", { className: "text-xs text-slate-500 leading-tight", children: branding.tagline })
                   ] })
-                ]
+                ] })
               }
             ),
             /* @__PURE__ */ jsx(
