@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.4.11-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F527} FIX: setUsers reference error in share link", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.5.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F6E1}\uFE0F Major refactor: safe saves, no data loss", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -18,7 +18,9 @@ var API_KEYS = {
   "users": "users",
   "branding": "branding",
   // 'team-chat': 'team_chat',  // DISABLED in v2.3.6 - team chat removed
-  "templates": "templates"
+  "templates": "templates",
+  "gantt-approvals": "gantt_approvals"
+  // Gantt-level approvals sync to DB
 };
 async function apiFetch(action, options = {}) {
   const url = `${API_BASE}?action=${action}${options.query ? "&" + options.query : ""}`;
@@ -55,14 +57,18 @@ if (typeof window !== "undefined" && !window.storage) {
         try {
           const data = await apiFetch(apiAction);
           let safeData = data;
-          if (key !== "branding") {
+          if (key === "branding") {
+            if (!safeData || typeof safeData !== "object" || Array.isArray(safeData)) {
+              safeData = {};
+            }
+          } else if (key === "gantt-approvals") {
+            if (!safeData || typeof safeData !== "object" || Array.isArray(safeData)) {
+              safeData = {};
+            }
+          } else {
             if (!Array.isArray(safeData)) {
               console.warn(`API '${apiAction}' returned non-array, normalizing to []:`, safeData);
               safeData = [];
-            }
-          } else {
-            if (!safeData || typeof safeData !== "object" || Array.isArray(safeData)) {
-              safeData = {};
             }
           }
           const value = JSON.stringify(safeData);
@@ -88,38 +94,12 @@ if (typeof window !== "undefined" && !window.storage) {
           const parsed = JSON.parse(value);
           if (key === "branding") {
             await apiFetch("branding", { method: "POST", body: parsed });
+            return { value };
           } else {
-            if (Array.isArray(parsed)) {
-              let existingIds = /* @__PURE__ */ new Set();
-              try {
-                const existingData = await apiFetch(apiAction);
-                if (Array.isArray(existingData)) {
-                  existingIds = new Set(existingData.map((item) => item.id));
-                }
-              } catch (e) {
-              }
-              const newIds = new Set(parsed.map((item) => item.id));
-              for (const oldId of existingIds) {
-                if (!newIds.has(oldId)) {
-                  try {
-                    await apiFetch(apiAction, { method: "DELETE", query: `id=${encodeURIComponent(oldId)}` });
-                  } catch (e) {
-                    console.warn("Delete failed:", e.message);
-                  }
-                }
-              }
-              for (const item of parsed) {
-                try {
-                  await apiFetch(apiAction, { method: "POST", body: item });
-                } catch (e) {
-                  console.warn("Upsert failed:", e.message, item);
-                }
-              }
-            }
+            console.warn(`\u26A0\uFE0F storage.set('${key}') called - bulk sync is disabled. Use direct API instead.`);
           }
-          return { value };
         } catch (e) {
-          console.warn(`API set '${key}' failed, falling back to localStorage:`, e.message);
+          console.warn(`API set '${key}' failed:`, e.message);
         }
       }
       try {
@@ -272,10 +252,24 @@ function ContentCalendarApp() {
         users = [];
       }
       if (!users || users.length === 0) {
-        users = [
-          { username: "admin", password: "admin123", role: "admin", name: "\u05DE\u05E0\u05D4\u05DC \u05E8\u05D0\u05E9\u05D9", createdAt: (/* @__PURE__ */ new Date()).toISOString() }
-        ];
-        await window.storage.set("users", JSON.stringify(users));
+        const defaultAdmin = {
+          id: "admin_default",
+          username: "admin",
+          password: "admin123",
+          role: "admin",
+          name: "\u05DE\u05E0\u05D4\u05DC \u05E8\u05D0\u05E9\u05D9",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        users = [defaultAdmin];
+        try {
+          await fetch("/api.php?action=users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(defaultAdmin)
+          });
+        } catch (e) {
+          console.warn("Could not save default admin to server:", e);
+        }
       }
       const hash = window.location.hash;
       const dataMatch = hash.match(/data=([A-Za-z0-9\-_]+)/);
@@ -294,24 +288,13 @@ function ContentCalendarApp() {
           if (payload.u && payload.u.role === "client") {
             if (payload.p && Array.isArray(payload.p)) {
               try {
-                const existingResult = await window.storage.get("content-posts");
-                let existing = [];
-                if (existingResult && existingResult.value) {
-                  existing = JSON.parse(existingResult.value);
-                }
-                const otherPosts = existing.filter((p) => p.businessName !== payload.u.businessName);
-                const mergedPosts = [...otherPosts, ...payload.p];
-                await window.storage.set("content-posts", JSON.stringify(mergedPosts));
+                console.log("Legacy URL data import - posts loaded into payload only");
               } catch (e) {
                 console.warn("Could not cache posts:", e);
               }
             }
             if (payload.b) {
               setBranding({ ...DEFAULT_BRANDING, ...payload.b });
-              try {
-                await window.storage.set("branding", JSON.stringify(payload.b));
-              } catch (e) {
-              }
             }
             setCurrentUser(payload.u);
             setIsShareMode(true);
@@ -585,52 +568,57 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
     loadData();
   }, []);
   useEffect(() => {
-    if (!loading && posts.length > 0) {
-      const autoBackup = async () => {
+    if (loading || posts.length === 0) return;
+    const autoBackup = async () => {
+      try {
+        const brandingResult = await window.storage.get("branding").catch(() => null);
+        let brandingData = {};
         try {
-          const brandingResult = await window.storage.get("branding").catch(() => null);
-          const branding2 = brandingResult ? JSON.parse(brandingResult.value) : {};
-          const backup = {
-            version: "2.4.9",
-            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-            type: "auto",
-            posts,
-            users,
-            branding: branding2,
-            templates
-          };
-          let backups = [];
-          try {
-            const stored = localStorage.getItem("bidernet_auto_backups");
-            if (stored) backups = JSON.parse(stored);
-            if (!Array.isArray(backups)) backups = [];
-          } catch (e) {
-            backups = [];
-          }
-          backups.unshift(backup);
-          backups = backups.slice(0, 3);
-          try {
-            localStorage.setItem("bidernet_auto_backups", JSON.stringify(backups));
-            console.log(`%c\u{1F4BE} Auto-backup saved (${posts.length} posts)`, "color: #10b981; font-weight: bold;");
-          } catch (e) {
-            console.warn("Auto-backup quota exceeded - removing media to save space");
-            const lightBackup = {
-              ...backup,
-              posts: backup.posts.map((p) => ({ ...p, mediaData: p.mediaData ? "[REMOVED-TOO-LARGE]" : null }))
-            };
-            backups[0] = lightBackup;
-            try {
-              localStorage.setItem("bidernet_auto_backups", JSON.stringify(backups));
-            } catch (e2) {
-              console.error("Auto-backup failed even without media:", e2);
-            }
+          if (brandingResult && brandingResult.value) {
+            brandingData = JSON.parse(brandingResult.value);
           }
         } catch (e) {
-          console.error("Auto-backup error:", e);
         }
-      };
-      autoBackup();
-    }
+        const backup = {
+          version: "2.5.0",
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          type: "auto",
+          posts,
+          users,
+          branding: brandingData,
+          templates
+        };
+        let backups = [];
+        try {
+          const stored = localStorage.getItem("bidernet_auto_backups");
+          if (stored) backups = JSON.parse(stored);
+          if (!Array.isArray(backups)) backups = [];
+        } catch (e) {
+          backups = [];
+        }
+        backups.unshift(backup);
+        backups = backups.slice(0, 3);
+        try {
+          localStorage.setItem("bidernet_auto_backups", JSON.stringify(backups));
+          console.log(`%c\u{1F4BE} Auto-backup saved (${posts.length} posts)`, "color: #10b981; font-weight: bold;");
+        } catch (e) {
+          console.warn("Auto-backup quota exceeded - removing media to save space");
+          const lightBackup = {
+            ...backup,
+            posts: backup.posts.map((p) => ({ ...p, mediaData: p.mediaData ? "[REMOVED-TOO-LARGE]" : null }))
+          };
+          backups[0] = lightBackup;
+          try {
+            localStorage.setItem("bidernet_auto_backups", JSON.stringify(backups));
+          } catch (e2) {
+            console.error("Auto-backup failed even without media:", e2);
+          }
+        }
+      } catch (e) {
+        console.error("Auto-backup error:", e);
+      }
+    };
+    autoBackup();
   }, [loading]);
   useEffect(() => {
     const handler = () => setActiveView("publish");
@@ -674,16 +662,140 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
     }
   };
   const savePosts = async (updated) => {
+    const newIds = new Set(updated.map((p) => p.id));
+    const toDelete = posts.filter((p) => !newIds.has(p.id));
+    const currentMap = {};
+    posts.forEach((p) => {
+      currentMap[p.id] = p;
+    });
+    const toUpsert = updated.filter((newPost) => {
+      const current = currentMap[newPost.id];
+      if (!current) return true;
+      return JSON.stringify(newPost) !== JSON.stringify(current);
+    });
+    console.log(`\u{1F4BE} savePosts: ${toUpsert.length} to save, ${toDelete.length} to delete`);
+    const errors = [];
+    for (const post of toUpsert) {
+      try {
+        const res = await fetch("/api.php?action=posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(post)
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          const errMsg = `Post ${post.id}: HTTP ${res.status} - ${text.substring(0, 200)}`;
+          errors.push(errMsg);
+          console.error(errMsg);
+        } else {
+          console.log(`\u2713 Saved post ${post.id}`);
+        }
+      } catch (e) {
+        const errMsg = `Post ${post.id}: ${e.message}`;
+        errors.push(errMsg);
+        console.error(errMsg);
+      }
+    }
+    for (const post of toDelete) {
+      try {
+        await fetch(`/api.php?action=posts&id=${encodeURIComponent(post.id)}`, { method: "DELETE" });
+      } catch (e) {
+        errors.push(`Delete ${post.id}: ${e.message}`);
+      }
+    }
+    if (errors.length > 0) {
+      console.error("\u26A0\uFE0F Save errors:", errors);
+      throw new Error(`\u05E9\u05D2\u05D9\u05D0\u05D5\u05EA \u05D1\u05E9\u05DE\u05D9\u05E8\u05D4 (${errors.length}):
+${errors.slice(0, 3).join("\n")}`);
+    }
     setPosts(updated);
-    await window.storage.set("content-posts", JSON.stringify(updated));
+    console.log(`\u2713 savePosts complete`);
   };
   const saveUsers = async (updated) => {
+    const newIds = new Set(updated.map((u) => u.id));
+    const toDelete = users.filter((u) => !newIds.has(u.id));
+    const currentMap = {};
+    users.forEach((u) => {
+      currentMap[u.id] = u;
+    });
+    const toUpsert = updated.filter((newUser) => {
+      const current = currentMap[newUser.id];
+      if (!current) return true;
+      return JSON.stringify(newUser) !== JSON.stringify(current);
+    });
+    console.log(`\u{1F4BE} saveUsers: ${toUpsert.length} upsert, ${toDelete.length} delete`);
+    const errors = [];
+    for (const user2 of toUpsert) {
+      try {
+        const res = await fetch("/api.php?action=users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(user2)
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          errors.push(`User ${user2.username}: HTTP ${res.status}`);
+          console.error("Save user failed:", res.status, text.substring(0, 200));
+        }
+      } catch (e) {
+        errors.push(`User ${user2.username}: ${e.message}`);
+      }
+    }
+    for (const user2 of toDelete) {
+      try {
+        await fetch(`/api.php?action=users&id=${encodeURIComponent(user2.id)}`, { method: "DELETE" });
+      } catch (e) {
+        errors.push(`Delete ${user2.username}: ${e.message}`);
+      }
+    }
+    if (errors.length > 0) {
+      console.error("\u26A0\uFE0F Save users errors:", errors);
+      throw new Error(`\u05E9\u05D2\u05D9\u05D0\u05D5\u05EA \u05D1\u05E9\u05DE\u05D9\u05E8\u05EA \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD (${errors.length}):
+${errors.slice(0, 3).join("\n")}`);
+    }
     setUsers(updated);
-    await window.storage.set("users", JSON.stringify(updated));
+    console.log(`\u2713 saveUsers complete`);
   };
   const saveTemplates = async (updated) => {
+    const newIds = new Set(updated.map((t) => t.id));
+    const toDelete = templates.filter((t) => !newIds.has(t.id));
+    const currentMap = {};
+    templates.forEach((t) => {
+      currentMap[t.id] = t;
+    });
+    const toUpsert = updated.filter((newTpl) => {
+      const current = currentMap[newTpl.id];
+      if (!current) return true;
+      return JSON.stringify(newTpl) !== JSON.stringify(current);
+    });
+    const errors = [];
+    for (const tpl of toUpsert) {
+      try {
+        const res = await fetch("/api.php?action=templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(tpl)
+        });
+        if (!res.ok) {
+          errors.push(`Template ${tpl.name}: HTTP ${res.status}`);
+        }
+      } catch (e) {
+        errors.push(`Template ${tpl.name}: ${e.message}`);
+        console.error("Template save failed:", e);
+      }
+    }
+    for (const tpl of toDelete) {
+      try {
+        await fetch(`/api.php?action=templates&id=${encodeURIComponent(tpl.id)}`, { method: "DELETE" });
+      } catch (e) {
+        errors.push(`Delete template: ${e.message}`);
+      }
+    }
+    if (errors.length > 0) {
+      console.error("\u26A0\uFE0F Save templates errors:", errors);
+      throw new Error(`\u05E9\u05D2\u05D9\u05D0\u05D5\u05EA \u05D1\u05E9\u05DE\u05D9\u05E8\u05EA \u05EA\u05D1\u05E0\u05D9\u05D5\u05EA: ${errors.slice(0, 2).join("; ")}`);
+    }
     setTemplates(updated);
-    await window.storage.set("templates", JSON.stringify(updated));
   };
   const safeUsers = Array.isArray(users) ? users : [];
   const safePosts = Array.isArray(posts) ? posts : [];
@@ -879,6 +991,80 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
         /* @__PURE__ */ jsxs(
           "button",
           {
+            onClick: async () => {
+              console.log("\u{1F50D} Running API diagnostics...");
+              const results = [];
+              try {
+                const r = await fetch("/api.php?action=ping");
+                if (r.ok) {
+                  const data = await r.json();
+                  results.push(`\u2713 Ping OK - ${data.version || "no version"} - ${data.db || "no db info"}`);
+                } else {
+                  results.push(`\u2717 Ping HTTP ${r.status}`);
+                }
+              } catch (e) {
+                results.push(`\u2717 Ping failed: ${e.message}`);
+              }
+              try {
+                const r = await fetch("/api.php?action=posts");
+                if (r.ok) {
+                  const data = await r.json();
+                  results.push(`\u2713 Posts: ${Array.isArray(data) ? data.length : "not array"} in DB`);
+                } else {
+                  results.push(`\u2717 Posts GET HTTP ${r.status}`);
+                }
+              } catch (e) {
+                results.push(`\u2717 Posts GET failed: ${e.message}`);
+              }
+              try {
+                const r = await fetch("/api.php?action=users");
+                if (r.ok) {
+                  const data = await r.json();
+                  results.push(`\u2713 Users: ${Array.isArray(data) ? data.length : "not array"} in DB`);
+                } else {
+                  results.push(`\u2717 Users GET HTTP ${r.status}`);
+                }
+              } catch (e) {
+                results.push(`\u2717 Users GET failed: ${e.message}`);
+              }
+              try {
+                const testPost = {
+                  id: "test_" + Date.now(),
+                  businessName: "TEST",
+                  title: "Test",
+                  content: "Diagnostic test",
+                  date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+                  status: "draft"
+                };
+                const r = await fetch("/api.php?action=posts", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(testPost)
+                });
+                if (r.ok) {
+                  results.push(`\u2713 Save test post OK`);
+                  await fetch(`/api.php?action=posts&id=${testPost.id}`, { method: "DELETE" });
+                } else {
+                  const txt = await r.text();
+                  results.push(`\u2717 Save HTTP ${r.status}: ${txt.substring(0, 150)}`);
+                }
+              } catch (e) {
+                results.push(`\u2717 Save test failed: ${e.message}`);
+              }
+              console.log("\u{1F4CB} Diagnostics:", results);
+              alert("\u{1F50D} \u05D1\u05D3\u05D9\u05E7\u05EA \u05DE\u05E2\u05E8\u05DB\u05EA:\n\n" + results.join("\n"));
+            },
+            className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
+            title: "\u05D1\u05D3\u05D9\u05E7\u05EA \u05D7\u05D9\u05D1\u05D5\u05E8 API",
+            children: [
+              /* @__PURE__ */ jsx("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" }) }),
+              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05D1\u05D3\u05D9\u05E7\u05D4" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs(
+          "button",
+          {
             onClick: () => setShowBackupModal(true),
             className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
             title: "\u05D2\u05D9\u05D1\u05D5\u05D9 \u05D5\u05E9\u05D7\u05D6\u05D5\u05E8",
@@ -1032,18 +1218,46 @@ function ClientDashboard({ user, onLogout, branding }) {
     }
   };
   const savePosts = async (updatedClientPosts) => {
-    const allResult = await window.storage.get("content-posts");
-    let all = [];
-    if (allResult && allResult.value) {
+    const currentMap = {};
+    posts.forEach((p) => {
+      currentMap[p.id] = p;
+    });
+    const toUpsert = updatedClientPosts.filter((newPost) => {
+      const current = currentMap[newPost.id];
+      if (!current) return true;
+      return JSON.stringify(newPost) !== JSON.stringify(current);
+    });
+    const newIds = new Set(updatedClientPosts.map((p) => p.id));
+    const toDelete = posts.filter((p) => !newIds.has(p.id));
+    console.log(`[Client] savePosts: ${toUpsert.length} upsert, ${toDelete.length} delete`);
+    const errors = [];
+    for (const post of toUpsert) {
       try {
-        const parsed = JSON.parse(allResult.value);
-        if (Array.isArray(parsed)) all = parsed;
+        const res = await fetch("/api.php?action=posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(post)
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          errors.push(`Post ${post.id}: HTTP ${res.status}`);
+          console.error("Save failed:", res.status, text.substring(0, 200));
+        }
       } catch (e) {
+        errors.push(`Post ${post.id}: ${e.message}`);
+        console.error("Save failed:", e);
       }
     }
-    const otherPosts = all.filter((p) => p.businessName !== user.businessName);
-    const merged = [...otherPosts, ...updatedClientPosts];
-    await window.storage.set("content-posts", JSON.stringify(merged));
+    for (const post of toDelete) {
+      try {
+        await fetch(`/api.php?action=posts&id=${encodeURIComponent(post.id)}`, { method: "DELETE" });
+      } catch (e) {
+        console.error("Delete failed:", e);
+      }
+    }
+    if (errors.length > 0) {
+      throw new Error(`\u05E9\u05D2\u05D9\u05D0\u05D5\u05EA \u05D1\u05E9\u05DE\u05D9\u05E8\u05D4: ${errors.slice(0, 3).join("; ")}`);
+    }
     setPosts(updatedClientPosts);
   };
   const updatePostApproval = async (postId, approval, comment = "") => {
@@ -1098,16 +1312,26 @@ function ClientDashboard({ user, onLogout, branding }) {
     }
   };
   const submitFinalApproval = async (status, comment) => {
-    const approvalsResult = await window.storage.get("gantt-approvals").catch(() => null);
-    const approvals = approvalsResult && approvalsResult.value ? JSON.parse(approvalsResult.value) : {};
-    approvals[user.businessName] = {
+    const approval = {
+      businessName: user.businessName,
       status,
       comment,
       approvedAt: (/* @__PURE__ */ new Date()).toISOString(),
       approvedBy: user.username,
       postCount: posts.length
     };
-    await window.storage.set("gantt-approvals", JSON.stringify(approvals));
+    try {
+      const res = await fetch("/api.php?action=gantt_approvals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(approval)
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+    } catch (e) {
+      console.error("Save gantt approval failed:", e);
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DE\u05D9\u05E8\u05D4. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.");
+      return;
+    }
     setShowFinalApproval(false);
     alert(status === "approved" ? "\u05D4\u05D2\u05D0\u05E0\u05D8 \u05D0\u05D5\u05E9\u05E8 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4! \u2713" : "\u05D4\u05D4\u05E2\u05E8\u05D5\u05EA \u05E0\u05E9\u05DC\u05D7\u05D5 \u05DC\u05E6\u05D5\u05D5\u05EA \u05D4\u05E0\u05D9\u05D4\u05D5\u05DC");
   };
@@ -1392,8 +1616,12 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
   const handleDelete = async (id) => {
     if (!confirm("\u05D4\u05D0\u05DD \u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05D4\u05E4\u05D5\u05E1\u05D8?")) return;
     const updated = posts.filter((p) => p.id !== id);
-    await savePosts(updated);
-    setSelectedPost(null);
+    try {
+      await savePosts(updated);
+      setSelectedPost(null);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05DE\u05D7\u05D9\u05E7\u05EA \u05E4\u05D5\u05E1\u05D8: " + e.message);
+    }
   };
   const handleDuplicate = (post) => {
     const duplicate = {
@@ -1687,6 +1915,7 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
           const adminName = currentUser?.name || "\u05DE\u05E0\u05D4\u05DC";
           const now = (/* @__PURE__ */ new Date()).toISOString();
           let updated;
+          let newPostId = null;
           if (editingPost) {
             const historyEntry = {
               timestamp: now,
@@ -1703,6 +1932,7 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
               history: [...editingPost.history || [], historyEntry]
             } : p);
           } else {
+            newPostId = Date.now().toString();
             const historyEntry = {
               timestamp: now,
               author: adminName,
@@ -1711,7 +1941,7 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
             };
             updated = [...posts, {
               ...data,
-              id: Date.now().toString(),
+              id: newPostId,
               createdAt: now,
               messages: [],
               history: [historyEntry]
@@ -1881,7 +2111,11 @@ function PublishView({ posts, savePosts, clientUsers, getBusinessColor, currentU
       }
       return p;
     });
-    await savePosts(updated);
+    try {
+      await savePosts(updated);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E1\u05D9\u05DE\u05D5\u05DF \u05E4\u05E8\u05E1\u05D5\u05DD: " + e.message);
+    }
   };
   const deletePost = async (postId) => {
     const postToDelete = posts.find((p) => p.id === postId);
@@ -1892,7 +2126,11 @@ ${postToDelete.title || stripHtml(postToDelete.content).substring(0, 50)}
 
 \u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05DC\u05D0 \u05E0\u05D9\u05EA\u05E0\u05EA \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC.`)) return;
     const updated = posts.filter((p) => p.id !== postId);
-    await savePosts(updated);
+    try {
+      await savePosts(updated);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05DE\u05D7\u05D9\u05E7\u05D4: " + e.message);
+    }
   };
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsx("div", { className: "bg-white rounded-xl border border-slate-200 p-2 mb-4", children: /* @__PURE__ */ jsxs("div", { className: "flex gap-2 flex-wrap", children: [
@@ -2279,7 +2517,11 @@ function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, e
       filterRole === "admin" ? "\u05D4\u05D0\u05DD \u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05D4\u05DE\u05E0\u05D4\u05DC? \u05D4\u05D5\u05D0 \u05DC\u05D0 \u05D9\u05D5\u05DB\u05DC \u05D9\u05D5\u05EA\u05E8 \u05DC\u05D4\u05D9\u05DB\u05E0\u05E1 \u05DC\u05DE\u05E2\u05E8\u05DB\u05EA." : "\u05D4\u05D0\u05DD \u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05D4\u05DE\u05E9\u05EA\u05DE\u05E9? \u05E4\u05E2\u05D5\u05DC\u05D4 \u05D6\u05D5 \u05DC\u05D0 \u05EA\u05DE\u05D7\u05E7 \u05D0\u05EA \u05D4\u05E4\u05D5\u05E1\u05D8\u05D9\u05DD \u05E9\u05DC\u05D5."
     )) return;
     const updated = users.filter((u) => u.username !== username);
-    await saveUsers(updated);
+    try {
+      await saveUsers(updated);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05DE\u05D7\u05D9\u05E7\u05D4: " + e.message);
+    }
   };
   const generateShareToken = () => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -2294,20 +2536,14 @@ function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, e
     if (!user.shareToken) {
       const token = generateShareToken();
       updatedUser = { ...user, shareToken: token };
+      const updated = users.map(
+        (u) => u.username === user.username ? updatedUser : u
+      );
       try {
-        const res = await fetch("/api.php?action=users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatedUser)
-        });
-        if (!res.ok) throw new Error("Save failed");
-        const updated = users.map(
-          (u) => u.username === user.username ? updatedUser : u
-        );
         await saveUsers(updated);
       } catch (e) {
         console.error("Failed to save share token:", e);
-        alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D9\u05E6\u05D9\u05E8\u05EA \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4\u05E9\u05D9\u05EA\u05D5\u05E3. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.");
+        alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D9\u05E6\u05D9\u05E8\u05EA \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4\u05E9\u05D9\u05EA\u05D5\u05E3: " + e.message);
         return;
       }
     }
@@ -2317,21 +2553,15 @@ function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, e
     if (!confirm("\u05D4\u05D0\u05DD \u05DC\u05D9\u05E6\u05D5\u05E8 \u05DC\u05D9\u05E0\u05E7 \u05D7\u05D3\u05E9? \u05D4\u05DC\u05D9\u05E0\u05E7 \u05D4\u05D9\u05E9\u05DF \u05D9\u05E4\u05E1\u05D9\u05E7 \u05DC\u05E2\u05D1\u05D5\u05D3.")) return;
     const newToken = generateShareToken();
     const updatedUser = { ...shareModalUser, shareToken: newToken };
+    const updated = users.map(
+      (u) => u.username === shareModalUser.username ? updatedUser : u
+    );
     try {
-      const res = await fetch("/api.php?action=users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedUser)
-      });
-      if (!res.ok) throw new Error("Save failed");
-      const updated = users.map(
-        (u) => u.username === shareModalUser.username ? updatedUser : u
-      );
       await saveUsers(updated);
       setShareModalUser(updatedUser);
     } catch (e) {
       console.error("Failed to regenerate token:", e);
-      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D9\u05E6\u05D9\u05E8\u05EA \u05DC\u05D9\u05E0\u05E7 \u05D7\u05D3\u05E9. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.");
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D9\u05E6\u05D9\u05E8\u05EA \u05DC\u05D9\u05E0\u05E7 \u05D7\u05D3\u05E9: " + e.message);
     }
   };
   const filteredUsers = users.filter((u) => u.role === filterRole);
@@ -2412,13 +2642,18 @@ function UsersView({ users, saveUsers, posts, showUserModal, setShowUserModal, e
         existingUsernames: users.map((u) => u.username),
         onSave: async (data) => {
           let updated;
+          const dataWithId = { ...data, id: data.id || (isRealEdit ? editingUser.id || editingUser.username : "user_" + Date.now()) };
           if (isRealEdit) {
-            updated = users.map((u) => u.username === editingUser.username ? { ...data, createdAt: editingUser.createdAt } : u);
+            updated = users.map((u) => u.username === editingUser.username ? { ...dataWithId, createdAt: editingUser.createdAt } : u);
           } else {
-            updated = [...users, { ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }];
+            updated = [...users, { ...dataWithId, createdAt: (/* @__PURE__ */ new Date()).toISOString() }];
           }
-          await saveUsers(updated);
-          setShowUserModal(false);
+          try {
+            await saveUsers(updated);
+            setShowUserModal(false);
+          } catch (e) {
+            alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DE\u05D9\u05E8\u05EA \u05DE\u05E9\u05EA\u05DE\u05E9:\n" + e.message);
+          }
         },
         onClose: () => setShowUserModal(false)
       }
@@ -2451,6 +2686,7 @@ function UserModal({ user, existingUsernames, onSave, onClose, defaultRole = "cl
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const logoInputRef = useRef(null);
   const handleLogoUpload = (e) => {
     const file = e.target.files[0];
@@ -2466,7 +2702,7 @@ function UserModal({ user, existingUsernames, onSave, onClose, defaultRole = "cl
     };
     reader.readAsDataURL(file);
   };
-  const handleSave = () => {
+  const handleSave = async () => {
     setError("");
     if (!formData.username.trim() || !formData.password.trim() || !formData.name.trim()) {
       setError("\u05D9\u05E9 \u05DC\u05DE\u05DC\u05D0 \u05E9\u05DD \u05DE\u05E9\u05EA\u05DE\u05E9, \u05E1\u05D9\u05E1\u05DE\u05D4 \u05D5\u05E9\u05DD \u05DE\u05DC\u05D0");
@@ -2484,7 +2720,14 @@ function UserModal({ user, existingUsernames, onSave, onClose, defaultRole = "cl
       setError("\u05D4\u05E1\u05D9\u05E1\u05DE\u05D4 \u05D7\u05D9\u05D9\u05D1\u05EA \u05DC\u05D4\u05D9\u05D5\u05EA \u05DC\u05E4\u05D7\u05D5\u05EA 4 \u05EA\u05D5\u05D5\u05D9\u05DD");
       return;
     }
-    onSave(formData);
+    setSaving(true);
+    try {
+      await onSave(formData);
+    } catch (e) {
+      setError("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DE\u05D9\u05E8\u05D4: " + e.message);
+    } finally {
+      setSaving(false);
+    }
   };
   return /* @__PURE__ */ jsx("div", { className: "fixed inset-0 bg-slate-900/50 flex items-end sm:items-center justify-center z-50 sm:p-4 backdrop-blur-sm", children: /* @__PURE__ */ jsxs("div", { className: "bg-white rounded-t-2xl sm:rounded-2xl max-w-lg w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto", children: [
     /* @__PURE__ */ jsxs("div", { className: "sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between", children: [
@@ -2618,8 +2861,22 @@ function UserModal({ user, existingUsernames, onSave, onClose, defaultRole = "cl
       ] })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 flex items-center justify-end gap-2", children: [
-      /* @__PURE__ */ jsx("button", { onClick: onClose, className: "px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition", children: "\u05D1\u05D9\u05D8\u05D5\u05DC" }),
-      /* @__PURE__ */ jsx("button", { onClick: handleSave, className: "px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition", children: user ? "\u05E9\u05DE\u05D5\u05E8 \u05E9\u05D9\u05E0\u05D5\u05D9\u05D9\u05DD" : "\u05E6\u05D5\u05E8 \u05DE\u05E9\u05EA\u05DE\u05E9" })
+      /* @__PURE__ */ jsx("button", { onClick: onClose, disabled: saving, className: "px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50", children: "\u05D1\u05D9\u05D8\u05D5\u05DC" }),
+      /* @__PURE__ */ jsx(
+        "button",
+        {
+          onClick: handleSave,
+          disabled: saving,
+          className: "px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg transition flex items-center gap-2",
+          children: saving ? /* @__PURE__ */ jsxs(Fragment, { children: [
+            /* @__PURE__ */ jsxs("svg", { className: "animate-spin w-4 h-4", viewBox: "0 0 24 24", fill: "none", children: [
+              /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "10", stroke: "currentColor", strokeWidth: "4", opacity: "0.25" }),
+              /* @__PURE__ */ jsx("path", { d: "M4 12a8 8 0 018-8", stroke: "currentColor", strokeWidth: "4" })
+            ] }),
+            "\u05E9\u05D5\u05DE\u05E8..."
+          ] }) : user ? "\u05E9\u05DE\u05D5\u05E8 \u05E9\u05D9\u05E0\u05D5\u05D9\u05D9\u05DD" : "\u05E6\u05D5\u05E8 \u05DE\u05E9\u05EA\u05DE\u05E9"
+        }
+      )
     ] })
   ] }) });
 }
@@ -2877,6 +3134,7 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
   const fileInputRef = useRef(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const [saving, setSaving] = useState(false);
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -2891,12 +3149,34 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
     };
     reader.readAsDataURL(file);
   };
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.businessName.trim() || !formData.date || !formData.content.trim()) {
       alert("\u05D9\u05E9 \u05DC\u05DE\u05DC\u05D0 \u05E9\u05DD \u05E2\u05E1\u05E7, \u05EA\u05D0\u05E8\u05D9\u05DA \u05D5\u05EA\u05D5\u05DB\u05DF");
       return;
     }
-    onSave(formData);
+    if (formData.mediaData) {
+      const sizeKB = Math.round(formData.mediaData.length / 1024);
+      if (sizeKB > 5e3) {
+        const proceed = confirm(
+          `\u26A0\uFE0F \u05E7\u05D5\u05D1\u05E5 \u05D4\u05DE\u05D3\u05D9\u05D4 \u05D2\u05D3\u05D5\u05DC (${sizeKB}KB / ${(sizeKB / 1024).toFixed(1)}MB).
+
+\u05D0\u05DD \u05D4\u05E9\u05E8\u05EA \u05DC\u05D0 \u05DE\u05D5\u05D2\u05D3\u05E8 \u05DC\u05E7\u05DC\u05D5\u05D8 \u05E7\u05D1\u05E6\u05D9\u05DD \u05D2\u05D3\u05D5\u05DC\u05D9\u05DD - \u05D4\u05E9\u05DE\u05D9\u05E8\u05D4 \u05EA\u05D9\u05DB\u05E9\u05DC.
+
+\u05D4\u05D0\u05DD \u05DC\u05D4\u05DE\u05E9\u05D9\u05DA?`
+        );
+        if (!proceed) return;
+      }
+      console.log(`\u{1F4E6} Payload size: ${sizeKB}KB media + post data`);
+    }
+    setSaving(true);
+    try {
+      await onSave(formData);
+    } catch (e) {
+      console.error("Save failed:", e);
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DE\u05D9\u05E8\u05EA \u05D4\u05E4\u05D5\u05E1\u05D8:\n\n" + e.message + "\n\n\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05D4-Console (F12) \u05DC\u05E4\u05E8\u05D8\u05D9\u05DD \u05E0\u05D5\u05E1\u05E4\u05D9\u05DD.");
+    } finally {
+      setSaving(false);
+    }
   };
   const statusColors = {
     scheduled: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", label: "\u05DE\u05EA\u05D5\u05D6\u05DE\u05DF" },
@@ -3039,8 +3319,22 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
           " \u05DE\u05D7\u05E7"
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "flex gap-2 mr-auto", children: [
-          /* @__PURE__ */ jsx("button", { onClick: onClose, className: "px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg", children: "\u05D1\u05D9\u05D8\u05D5\u05DC" }),
-          /* @__PURE__ */ jsx("button", { onClick: handleSave, disabled: clientUsers.length === 0, className: "px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg", children: post ? "\u05E9\u05DE\u05D5\u05E8" : "\u05E6\u05D5\u05E8 \u05E4\u05D5\u05E1\u05D8" })
+          /* @__PURE__ */ jsx("button", { onClick: onClose, disabled: saving, className: "px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg disabled:opacity-50", children: "\u05D1\u05D9\u05D8\u05D5\u05DC" }),
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              onClick: handleSave,
+              disabled: clientUsers.length === 0 || saving,
+              className: "px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg flex items-center gap-2",
+              children: saving ? /* @__PURE__ */ jsxs(Fragment, { children: [
+                /* @__PURE__ */ jsxs("svg", { className: "animate-spin w-4 h-4", viewBox: "0 0 24 24", fill: "none", children: [
+                  /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "10", stroke: "currentColor", strokeWidth: "4", opacity: "0.25" }),
+                  /* @__PURE__ */ jsx("path", { d: "M4 12a8 8 0 018-8", stroke: "currentColor", strokeWidth: "4" })
+                ] }),
+                "\u05E9\u05D5\u05DE\u05E8..."
+              ] }) : post ? "\u05E9\u05DE\u05D5\u05E8" : "\u05E6\u05D5\u05E8 \u05E4\u05D5\u05E1\u05D8"
+            }
+          )
         ] })
       ] })
     ] }),
