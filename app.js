@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.5.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F6E1}\uFE0F Major refactor: safe saves, no data loss", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.6.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F3A8} New UI: Sidebar navigation + thin top bar", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -564,6 +564,7 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
   const [showBrandingModal, setShowBrandingModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   useEffect(() => {
     loadData();
   }, []);
@@ -810,355 +811,437 @@ ${errors.slice(0, 3).join("\n")}`);
     return /* @__PURE__ */ jsx("div", { className: "min-h-screen bg-slate-50 flex items-center justify-center", dir: "rtl", children: "\u05D8\u05D5\u05E2\u05DF..." });
   }
   return /* @__PURE__ */ jsxs("div", { className: "min-h-screen bg-slate-50", dir: "rtl", style: { fontFamily: '"PingHL", "Heebo", system-ui, sans-serif' }, children: [
-    /* @__PURE__ */ jsx("header", { className: "bg-white border-b border-slate-200 sticky top-0 z-30", children: /* @__PURE__ */ jsx("div", { className: "max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4", children: /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between flex-wrap gap-2 sm:gap-4", children: [
-      /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-3 sm:gap-6 min-w-0", children: [
-        /* @__PURE__ */ jsx("div", { className: "hidden sm:flex items-center gap-3 sm:gap-4 min-w-0", children: branding.logoData ? /* @__PURE__ */ jsx(
-          "button",
-          {
-            onClick: () => setActiveView("posts"),
-            className: "bg-white rounded-lg p-2 flex-shrink-0 hover:bg-slate-50 transition cursor-pointer",
-            title: "\u05D7\u05D6\u05E8\u05D4 \u05DC\u05E8\u05D0\u05E9\u05D9",
-            children: /* @__PURE__ */ jsx(
-              "img",
+    sidebarOpen && /* @__PURE__ */ jsx(
+      "div",
+      {
+        className: "fixed inset-0 bg-black/40 z-40 lg:hidden",
+        onClick: () => setSidebarOpen(false)
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "aside",
+      {
+        className: `fixed top-0 right-0 h-full w-64 bg-white border-l border-slate-200 z-50 transform transition-transform lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`,
+        children: /* @__PURE__ */ jsxs("div", { className: "flex flex-col h-full", children: [
+          /* @__PURE__ */ jsxs("div", { className: "px-5 py-5 border-b border-slate-200 flex items-center justify-between", children: [
+            /* @__PURE__ */ jsxs(
+              "button",
               {
-                src: branding.logoData,
-                alt: branding.companyName,
-                className: "h-8 sm:h-10 w-auto object-contain"
+                onClick: () => {
+                  setActiveView("posts");
+                  setSidebarOpen(false);
+                },
+                className: "flex items-center gap-3 hover:opacity-80 transition",
+                title: "\u05D7\u05D6\u05E8\u05D4 \u05DC\u05E8\u05D0\u05E9\u05D9",
+                children: [
+                  branding.logoData ? /* @__PURE__ */ jsx(
+                    "img",
+                    {
+                      src: branding.logoData,
+                      alt: branding.companyName,
+                      className: "h-10 w-auto object-contain"
+                    }
+                  ) : /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      className: "w-10 h-10 rounded-xl flex items-center justify-center",
+                      style: { background: `linear-gradient(135deg, ${branding.secondaryColor}, ${branding.secondaryColor}80)` },
+                      children: /* @__PURE__ */ jsx(Shield, { className: "w-5 h-5 text-white" })
+                    }
+                  ),
+                  /* @__PURE__ */ jsxs("div", { className: "text-right", children: [
+                    /* @__PURE__ */ jsx("div", { className: "font-bold text-slate-900 text-sm leading-tight", children: branding.companyName }),
+                    /* @__PURE__ */ jsx("div", { className: "text-xs text-slate-500 leading-tight", children: branding.tagline })
+                  ] })
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsx(
+              "button",
+              {
+                onClick: () => setSidebarOpen(false),
+                className: "lg:hidden p-1 hover:bg-slate-100 rounded",
+                children: /* @__PURE__ */ jsx(X, { className: "w-5 h-5 text-slate-500" })
               }
             )
-          }
-        ) : /* @__PURE__ */ jsx(
-          "button",
-          {
-            onClick: () => setActiveView("posts"),
-            className: "w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0 hover:opacity-90 transition cursor-pointer",
-            style: { background: `linear-gradient(135deg, ${branding.secondaryColor}, ${branding.secondaryColor}80)` },
-            title: "\u05D7\u05D6\u05E8\u05D4 \u05DC\u05E8\u05D0\u05E9\u05D9",
-            children: /* @__PURE__ */ jsx(Shield, { className: "w-6 h-6 text-white" })
-          }
-        ) }),
-        /* @__PURE__ */ jsxs("nav", { className: "flex items-center gap-1", children: [
+          ] }),
+          /* @__PURE__ */ jsxs("nav", { className: "flex-1 overflow-y-auto py-4", children: [
+            /* @__PURE__ */ jsx("div", { className: "px-3 mb-1", children: /* @__PURE__ */ jsx("div", { className: "px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider", children: "\u05E0\u05D9\u05D5\u05D5\u05D8" }) }),
+            /* @__PURE__ */ jsxs("div", { className: "px-3 space-y-1", children: [
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => {
+                    setActiveView("posts");
+                    setSidebarOpen(false);
+                  },
+                  className: `w-full px-3 py-2.5 text-sm rounded-lg transition flex items-center gap-3 ${activeView === "posts" ? "font-semibold" : "text-slate-700 hover:bg-slate-100"}`,
+                  style: activeView === "posts" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
+                  children: [
+                    /* @__PURE__ */ jsx("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" }) }),
+                    /* @__PURE__ */ jsx("span", { children: "\u05E8\u05D0\u05E9\u05D9" })
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => {
+                    setActiveView("publish");
+                    setSidebarOpen(false);
+                  },
+                  className: `w-full px-3 py-2.5 text-sm rounded-lg transition flex items-center gap-3 ${activeView === "publish" ? "font-semibold" : "text-slate-700 hover:bg-slate-100"}`,
+                  style: activeView === "publish" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
+                  children: [
+                    /* @__PURE__ */ jsx(Send, { className: "w-5 h-5" }),
+                    /* @__PURE__ */ jsx("span", { className: "flex-1 text-right", children: "\u05DC\u05E4\u05E8\u05E1\u05D5\u05DD" }),
+                    (() => {
+                      const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+                      const dueCount = posts.filter(
+                        (p) => p.date <= today && p.status !== "published" && p.clientApproval?.status === "approved"
+                      ).length;
+                      if (dueCount === 0) return null;
+                      return /* @__PURE__ */ jsx("span", { className: "bg-rose-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center", children: dueCount });
+                    })()
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => {
+                    setActiveView("users");
+                    setSidebarOpen(false);
+                  },
+                  className: `w-full px-3 py-2.5 text-sm rounded-lg transition flex items-center gap-3 ${activeView === "users" ? "font-semibold" : "text-slate-700 hover:bg-slate-100"}`,
+                  style: activeView === "users" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
+                  children: [
+                    /* @__PURE__ */ jsx(Users, { className: "w-5 h-5" }),
+                    /* @__PURE__ */ jsx("span", { children: "\u05DC\u05E7\u05D5\u05D7\u05D5\u05EA" })
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => {
+                    setActiveView("admins");
+                    setSidebarOpen(false);
+                  },
+                  className: `w-full px-3 py-2.5 text-sm rounded-lg transition flex items-center gap-3 ${activeView === "admins" ? "font-semibold" : "text-slate-700 hover:bg-slate-100"}`,
+                  style: activeView === "admins" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
+                  children: [
+                    /* @__PURE__ */ jsx(Shield, { className: "w-5 h-5" }),
+                    /* @__PURE__ */ jsx("span", { children: "\u05DE\u05E0\u05D4\u05DC\u05D9\u05DD" })
+                  ]
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsx("div", { className: "px-3 mb-1 mt-6", children: /* @__PURE__ */ jsx("div", { className: "px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider", children: "\u05DB\u05DC\u05D9\u05DD" }) }),
+            /* @__PURE__ */ jsxs("div", { className: "px-3 space-y-1", children: [
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => {
+                    loadData();
+                    setSidebarOpen(false);
+                  },
+                  className: "w-full px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-3",
+                  title: "\u05E8\u05E2\u05E0\u05DF \u05DE\u05D4\u05E9\u05E8\u05EA",
+                  children: [
+                    /* @__PURE__ */ jsx("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" }) }),
+                    /* @__PURE__ */ jsx("span", { children: "\u05E8\u05E2\u05E0\u05DF" })
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: async () => {
+                    setSidebarOpen(false);
+                    console.log("\u{1F50D} Running API diagnostics...");
+                    const results = [];
+                    try {
+                      const r = await fetch("/api.php?action=ping");
+                      if (r.ok) {
+                        const data = await r.json();
+                        results.push(`\u2713 Ping OK - ${data.version || "no version"} - ${data.db || "no db info"}`);
+                      } else {
+                        results.push(`\u2717 Ping HTTP ${r.status}`);
+                      }
+                    } catch (e) {
+                      results.push(`\u2717 Ping failed: ${e.message}`);
+                    }
+                    try {
+                      const r = await fetch("/api.php?action=posts");
+                      if (r.ok) {
+                        const data = await r.json();
+                        results.push(`\u2713 Posts: ${Array.isArray(data) ? data.length : "not array"} in DB`);
+                      } else {
+                        results.push(`\u2717 Posts GET HTTP ${r.status}`);
+                      }
+                    } catch (e) {
+                      results.push(`\u2717 Posts GET failed: ${e.message}`);
+                    }
+                    try {
+                      const r = await fetch("/api.php?action=users");
+                      if (r.ok) {
+                        const data = await r.json();
+                        results.push(`\u2713 Users: ${Array.isArray(data) ? data.length : "not array"} in DB`);
+                      } else {
+                        results.push(`\u2717 Users GET HTTP ${r.status}`);
+                      }
+                    } catch (e) {
+                      results.push(`\u2717 Users GET failed: ${e.message}`);
+                    }
+                    try {
+                      const testPost = {
+                        id: "test_" + Date.now(),
+                        businessName: "TEST",
+                        title: "Test",
+                        content: "Diagnostic test",
+                        date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+                        status: "draft"
+                      };
+                      const r = await fetch("/api.php?action=posts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(testPost)
+                      });
+                      if (r.ok) {
+                        results.push(`\u2713 Save test post OK`);
+                        await fetch(`/api.php?action=posts&id=${testPost.id}`, { method: "DELETE" });
+                      } else {
+                        const txt = await r.text();
+                        results.push(`\u2717 Save HTTP ${r.status}: ${txt.substring(0, 150)}`);
+                      }
+                    } catch (e) {
+                      results.push(`\u2717 Save test failed: ${e.message}`);
+                    }
+                    console.log("\u{1F4CB} Diagnostics:", results);
+                    alert("\u{1F50D} \u05D1\u05D3\u05D9\u05E7\u05EA \u05DE\u05E2\u05E8\u05DB\u05EA:\n\n" + results.join("\n"));
+                  },
+                  className: "w-full px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-3",
+                  title: "\u05D1\u05D3\u05D9\u05E7\u05EA \u05D7\u05D9\u05D1\u05D5\u05E8 API",
+                  children: [
+                    /* @__PURE__ */ jsx("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" }) }),
+                    /* @__PURE__ */ jsx("span", { children: "\u05D1\u05D3\u05D9\u05E7\u05D4" })
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => {
+                    setShowBackupModal(true);
+                    setSidebarOpen(false);
+                  },
+                  className: "w-full px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-3",
+                  title: "\u05D2\u05D9\u05D1\u05D5\u05D9 \u05D5\u05E9\u05D7\u05D6\u05D5\u05E8",
+                  children: [
+                    /* @__PURE__ */ jsx("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" }) }),
+                    /* @__PURE__ */ jsx("span", { children: "\u05D2\u05D9\u05D1\u05D5\u05D9" })
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => {
+                    setShowBrandingModal(true);
+                    setSidebarOpen(false);
+                  },
+                  className: "w-full px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-3",
+                  title: "\u05D4\u05D2\u05D3\u05E8\u05D5\u05EA \u05DE\u05D9\u05EA\u05D5\u05D2",
+                  children: [
+                    /* @__PURE__ */ jsx(Settings, { className: "w-5 h-5" }),
+                    /* @__PURE__ */ jsx("span", { children: "\u05DE\u05D9\u05EA\u05D5\u05D2" })
+                  ]
+                }
+              )
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxs("div", { className: "border-t border-slate-200 px-4 py-3", children: [
+            /* @__PURE__ */ jsx("div", { className: "text-xs text-slate-500", children: "\u05DE\u05D7\u05D5\u05D1\u05E8 \u05DB-" }),
+            /* @__PURE__ */ jsx("div", { className: "font-semibold text-sm text-slate-900 truncate", children: user.name })
+          ] })
+        ] })
+      }
+    ),
+    /* @__PURE__ */ jsxs("div", { className: "lg:mr-64", children: [
+      /* @__PURE__ */ jsx("header", { className: "bg-white border-b border-slate-200 sticky top-0 z-30", children: /* @__PURE__ */ jsxs("div", { className: "px-3 sm:px-6 py-2.5 flex items-center justify-between gap-3", children: [
+        /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-3 min-w-0", children: [
           /* @__PURE__ */ jsx(
             "button",
             {
-              onClick: () => setActiveView("posts"),
-              className: `px-3 py-1.5 text-sm rounded-lg transition ${activeView === "posts" ? "font-medium" : "text-slate-600 hover:bg-slate-100"}`,
-              style: activeView === "posts" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
-              children: "\u05E8\u05D0\u05E9\u05D9"
+              onClick: () => setSidebarOpen(true),
+              className: "lg:hidden p-1.5 hover:bg-slate-100 rounded-lg",
+              title: "\u05EA\u05E4\u05E8\u05D9\u05D8",
+              children: /* @__PURE__ */ jsx("svg", { className: "w-5 h-5 text-slate-700", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M4 6h16M4 12h16M4 18h16" }) })
             }
           ),
-          /* @__PURE__ */ jsx("div", { className: "w-px h-4 bg-slate-200/70" }),
-          /* @__PURE__ */ jsxs(
+          /* @__PURE__ */ jsx("div", { className: "hidden sm:flex items-center gap-1.5 min-w-0", children: (() => {
+            const h = (/* @__PURE__ */ new Date()).getHours();
+            let icon, greeting;
+            if (h >= 5 && h < 12) {
+              icon = /* @__PURE__ */ jsx(Sun, { className: "w-4 h-4 text-amber-500" });
+              greeting = "\u05D1\u05D5\u05E7\u05E8 \u05D8\u05D5\u05D1";
+            } else if (h >= 12 && h < 17) {
+              icon = /* @__PURE__ */ jsx(Sun, { className: "w-4 h-4 text-amber-500" });
+              greeting = "\u05E6\u05D4\u05E8\u05D9\u05D9\u05DD \u05D8\u05D5\u05D1\u05D9\u05DD";
+            } else if (h >= 17 && h < 21) {
+              icon = /* @__PURE__ */ jsx(Sunset, { className: "w-4 h-4 text-orange-500" });
+              greeting = "\u05E2\u05E8\u05D1 \u05D8\u05D5\u05D1";
+            } else {
+              icon = /* @__PURE__ */ jsx(Moon, { className: "w-4 h-4 text-indigo-500" });
+              greeting = h >= 21 || h < 1 ? "\u05DC\u05D9\u05DC\u05D4 \u05D8\u05D5\u05D1" : "\u05DC\u05D9\u05DC\u05D4 \u05E9\u05E7\u05D8";
+            }
+            return /* @__PURE__ */ jsxs(Fragment, { children: [
+              icon,
+              /* @__PURE__ */ jsxs("span", { className: "text-sm text-slate-700 whitespace-nowrap truncate", children: [
+                greeting,
+                ", ",
+                /* @__PURE__ */ jsx("span", { className: "font-semibold", children: user.name })
+              ] })
+            ] });
+          })() }),
+          /* @__PURE__ */ jsx("span", { className: "sm:hidden text-sm font-semibold text-slate-700 truncate", children: user.name })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2", children: [
+          activeView === "posts" && /* @__PURE__ */ jsxs(
             "button",
             {
-              onClick: () => setActiveView("publish"),
-              className: `px-3 py-1.5 text-sm rounded-lg transition flex items-center gap-1.5 ${activeView === "publish" ? "font-medium" : "text-slate-600 hover:bg-slate-100"}`,
-              style: activeView === "publish" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
+              onClick: () => {
+                setEditingPost(null);
+                setShowPostModal(true);
+              },
+              className: "px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap hover:opacity-90",
+              style: { backgroundColor: "#d7ff00", color: "#013d19" },
               children: [
-                /* @__PURE__ */ jsx(Send, { className: "w-3.5 h-3.5" }),
-                "\u05DC\u05E4\u05E8\u05E1\u05D5\u05DD",
-                (() => {
-                  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-                  const dueCount = posts.filter(
-                    (p) => p.date <= today && p.status !== "published" && p.clientApproval?.status === "approved"
-                  ).length;
-                  if (dueCount === 0) return null;
-                  return /* @__PURE__ */ jsx("span", { className: "bg-rose-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center", children: dueCount });
-                })()
+                /* @__PURE__ */ jsx(Plus, { className: "w-4 h-4" }),
+                /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05E4\u05D5\u05E1\u05D8 \u05D7\u05D3\u05E9" }),
+                /* @__PURE__ */ jsx("span", { className: "sm:hidden", children: "\u05E4\u05D5\u05E1\u05D8" })
               ]
             }
           ),
-          /* @__PURE__ */ jsx("div", { className: "w-px h-4 bg-slate-200/70" }),
-          /* @__PURE__ */ jsx(
+          activeView === "users" && /* @__PURE__ */ jsxs(
             "button",
             {
-              onClick: () => setActiveView("users"),
-              className: `px-3 py-1.5 text-sm rounded-lg transition ${activeView === "users" ? "font-medium" : "text-slate-600 hover:bg-slate-100"}`,
-              style: activeView === "users" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
-              children: "\u05DC\u05E7\u05D5\u05D7\u05D5\u05EA"
+              onClick: () => {
+                setEditingUser({ role: "client" });
+                setShowUserModal(true);
+              },
+              className: "px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap hover:opacity-90",
+              style: { backgroundColor: "#d7ff00", color: "#013d19" },
+              children: [
+                /* @__PURE__ */ jsx(Plus, { className: "w-4 h-4" }),
+                /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05DC\u05E7\u05D5\u05D7 \u05D7\u05D3\u05E9" }),
+                /* @__PURE__ */ jsx("span", { className: "sm:hidden", children: "\u05DC\u05E7\u05D5\u05D7" })
+              ]
             }
           ),
-          /* @__PURE__ */ jsx("div", { className: "w-px h-4 bg-slate-200/70" }),
-          /* @__PURE__ */ jsx(
+          activeView === "admins" && /* @__PURE__ */ jsxs(
             "button",
             {
-              onClick: () => setActiveView("admins"),
-              className: `px-3 py-1.5 text-sm rounded-lg transition ${activeView === "admins" ? "font-medium" : "text-slate-600 hover:bg-slate-100"}`,
-              style: activeView === "admins" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
-              children: "\u05DE\u05E0\u05D4\u05DC\u05D9\u05DD"
+              onClick: () => {
+                setEditingUser({ role: "admin" });
+                setShowUserModal(true);
+              },
+              className: "px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap hover:opacity-90",
+              style: { backgroundColor: "#d7ff00", color: "#013d19" },
+              children: [
+                /* @__PURE__ */ jsx(Plus, { className: "w-4 h-4" }),
+                /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05DE\u05E0\u05D4\u05DC \u05D7\u05D3\u05E9" }),
+                /* @__PURE__ */ jsx("span", { className: "sm:hidden", children: "\u05DE\u05E0\u05D4\u05DC" })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxs(
+            "button",
+            {
+              onClick: onLogout,
+              className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
+              title: "\u05D9\u05E6\u05D9\u05D0\u05D4",
+              children: [
+                /* @__PURE__ */ jsx(LogOut, { className: "w-4 h-4" }),
+                /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05D9\u05E6\u05D9\u05D0\u05D4" })
+              ]
             }
           )
         ] })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2 sm:gap-3", children: [
-        /* @__PURE__ */ jsx("div", { className: "hidden md:flex items-center gap-1.5 border-l border-slate-200 pl-3", children: (() => {
-          const h = (/* @__PURE__ */ new Date()).getHours();
-          let icon, greeting;
-          if (h >= 5 && h < 12) {
-            icon = /* @__PURE__ */ jsx(Sun, { className: "w-4 h-4 text-slate-700" });
-            greeting = "\u05D1\u05D5\u05E7\u05E8 \u05D8\u05D5\u05D1";
-          } else if (h >= 12 && h < 17) {
-            icon = /* @__PURE__ */ jsx(Sun, { className: "w-4 h-4 text-slate-700" });
-            greeting = "\u05E6\u05D4\u05E8\u05D9\u05D9\u05DD \u05D8\u05D5\u05D1\u05D9\u05DD";
-          } else if (h >= 17 && h < 21) {
-            icon = /* @__PURE__ */ jsx(Sunset, { className: "w-4 h-4 text-slate-700" });
-            greeting = "\u05E2\u05E8\u05D1 \u05D8\u05D5\u05D1";
-          } else {
-            icon = /* @__PURE__ */ jsx(Moon, { className: "w-4 h-4 text-slate-700" });
-            greeting = h >= 21 || h < 1 ? "\u05DC\u05D9\u05DC\u05D4 \u05D8\u05D5\u05D1" : "\u05DC\u05D9\u05DC\u05D4 \u05E9\u05E7\u05D8";
-          }
-          return /* @__PURE__ */ jsxs(Fragment, { children: [
-            icon,
-            /* @__PURE__ */ jsxs("span", { className: "text-sm text-slate-700 whitespace-nowrap", children: [
-              greeting,
-              ", ",
-              /* @__PURE__ */ jsx("span", { className: "font-semibold", children: user.name })
-            ] })
-          ] });
-        })() }),
-        activeView === "posts" && /* @__PURE__ */ jsxs(
-          "button",
+      ] }) }),
+      /* @__PURE__ */ jsxs("main", { className: "px-3 sm:px-6 py-4 sm:py-6", children: [
+        activeView === "posts" && /* @__PURE__ */ jsx(
+          PostsView,
           {
-            onClick: () => {
-              setEditingPost(null);
-              setShowPostModal(true);
-            },
-            className: "px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap hover:opacity-90",
-            style: { backgroundColor: "#d7ff00", color: "#013d19" },
-            children: [
-              /* @__PURE__ */ jsx(Plus, { className: "w-4 h-4" }),
-              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05E4\u05D5\u05E1\u05D8 \u05D7\u05D3\u05E9" }),
-              /* @__PURE__ */ jsx("span", { className: "sm:hidden", children: "\u05E4\u05D5\u05E1\u05D8" })
-            ]
+            posts,
+            savePosts,
+            businesses,
+            selectedBusiness,
+            setSelectedBusiness,
+            viewMode,
+            setViewMode,
+            currentMonth,
+            setCurrentMonth,
+            searchTerm,
+            setSearchTerm,
+            selectedPost,
+            setSelectedPost,
+            showPostModal,
+            setShowPostModal,
+            editingPost,
+            setEditingPost,
+            getBusinessColor,
+            isAdmin: true,
+            currentUser: user,
+            clientUsers,
+            allUsers: users,
+            templates,
+            saveTemplates
           }
         ),
-        activeView === "users" && /* @__PURE__ */ jsxs(
-          "button",
+        activeView === "users" && /* @__PURE__ */ jsx(
+          UsersView,
           {
-            onClick: () => {
-              setEditingUser({ role: "client" });
-              setShowUserModal(true);
-            },
-            className: "px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap hover:opacity-90",
-            style: { backgroundColor: "#d7ff00", color: "#013d19" },
-            children: [
-              /* @__PURE__ */ jsx(Plus, { className: "w-4 h-4" }),
-              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05DC\u05E7\u05D5\u05D7 \u05D7\u05D3\u05E9" }),
-              /* @__PURE__ */ jsx("span", { className: "sm:hidden", children: "\u05DC\u05E7\u05D5\u05D7" })
-            ]
+            users,
+            saveUsers,
+            posts,
+            showUserModal,
+            setShowUserModal,
+            editingUser,
+            setEditingUser,
+            getBusinessColor,
+            branding,
+            filterRole: "client"
           }
         ),
-        activeView === "admins" && /* @__PURE__ */ jsxs(
-          "button",
+        activeView === "admins" && /* @__PURE__ */ jsx(
+          UsersView,
           {
-            onClick: () => {
-              setEditingUser({ role: "admin" });
-              setShowUserModal(true);
-            },
-            className: "px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap hover:opacity-90",
-            style: { backgroundColor: "#d7ff00", color: "#013d19" },
-            children: [
-              /* @__PURE__ */ jsx(Plus, { className: "w-4 h-4" }),
-              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05DE\u05E0\u05D4\u05DC \u05D7\u05D3\u05E9" }),
-              /* @__PURE__ */ jsx("span", { className: "sm:hidden", children: "\u05DE\u05E0\u05D4\u05DC" })
-            ]
+            users,
+            saveUsers,
+            posts,
+            showUserModal,
+            setShowUserModal,
+            editingUser,
+            setEditingUser,
+            getBusinessColor,
+            branding,
+            filterRole: "admin",
+            currentUser: user
           }
         ),
-        /* @__PURE__ */ jsxs(
-          "button",
+        activeView === "publish" && /* @__PURE__ */ jsx(
+          PublishView,
           {
-            onClick: () => setShowBrandingModal(true),
-            className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
-            title: "\u05D4\u05D2\u05D3\u05E8\u05D5\u05EA \u05DE\u05D9\u05EA\u05D5\u05D2",
-            children: [
-              /* @__PURE__ */ jsx(Settings, { className: "w-4 h-4" }),
-              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05DE\u05D9\u05EA\u05D5\u05D2" })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxs(
-          "button",
-          {
-            onClick: loadData,
-            className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
-            title: "\u05E8\u05E2\u05E0\u05DF \u05DE\u05D4\u05E9\u05E8\u05EA",
-            children: [
-              /* @__PURE__ */ jsx("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" }) }),
-              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05E8\u05E2\u05E0\u05DF" })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxs(
-          "button",
-          {
-            onClick: async () => {
-              console.log("\u{1F50D} Running API diagnostics...");
-              const results = [];
-              try {
-                const r = await fetch("/api.php?action=ping");
-                if (r.ok) {
-                  const data = await r.json();
-                  results.push(`\u2713 Ping OK - ${data.version || "no version"} - ${data.db || "no db info"}`);
-                } else {
-                  results.push(`\u2717 Ping HTTP ${r.status}`);
-                }
-              } catch (e) {
-                results.push(`\u2717 Ping failed: ${e.message}`);
-              }
-              try {
-                const r = await fetch("/api.php?action=posts");
-                if (r.ok) {
-                  const data = await r.json();
-                  results.push(`\u2713 Posts: ${Array.isArray(data) ? data.length : "not array"} in DB`);
-                } else {
-                  results.push(`\u2717 Posts GET HTTP ${r.status}`);
-                }
-              } catch (e) {
-                results.push(`\u2717 Posts GET failed: ${e.message}`);
-              }
-              try {
-                const r = await fetch("/api.php?action=users");
-                if (r.ok) {
-                  const data = await r.json();
-                  results.push(`\u2713 Users: ${Array.isArray(data) ? data.length : "not array"} in DB`);
-                } else {
-                  results.push(`\u2717 Users GET HTTP ${r.status}`);
-                }
-              } catch (e) {
-                results.push(`\u2717 Users GET failed: ${e.message}`);
-              }
-              try {
-                const testPost = {
-                  id: "test_" + Date.now(),
-                  businessName: "TEST",
-                  title: "Test",
-                  content: "Diagnostic test",
-                  date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-                  status: "draft"
-                };
-                const r = await fetch("/api.php?action=posts", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(testPost)
-                });
-                if (r.ok) {
-                  results.push(`\u2713 Save test post OK`);
-                  await fetch(`/api.php?action=posts&id=${testPost.id}`, { method: "DELETE" });
-                } else {
-                  const txt = await r.text();
-                  results.push(`\u2717 Save HTTP ${r.status}: ${txt.substring(0, 150)}`);
-                }
-              } catch (e) {
-                results.push(`\u2717 Save test failed: ${e.message}`);
-              }
-              console.log("\u{1F4CB} Diagnostics:", results);
-              alert("\u{1F50D} \u05D1\u05D3\u05D9\u05E7\u05EA \u05DE\u05E2\u05E8\u05DB\u05EA:\n\n" + results.join("\n"));
-            },
-            className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
-            title: "\u05D1\u05D3\u05D9\u05E7\u05EA \u05D7\u05D9\u05D1\u05D5\u05E8 API",
-            children: [
-              /* @__PURE__ */ jsx("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" }) }),
-              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05D1\u05D3\u05D9\u05E7\u05D4" })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxs(
-          "button",
-          {
-            onClick: () => setShowBackupModal(true),
-            className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
-            title: "\u05D2\u05D9\u05D1\u05D5\u05D9 \u05D5\u05E9\u05D7\u05D6\u05D5\u05E8",
-            children: [
-              /* @__PURE__ */ jsx("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" }) }),
-              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05D2\u05D9\u05D1\u05D5\u05D9" })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxs(
-          "button",
-          {
-            onClick: onLogout,
-            className: "px-2 sm:px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2",
-            title: "\u05D9\u05E6\u05D9\u05D0\u05D4",
-            children: [
-              /* @__PURE__ */ jsx(LogOut, { className: "w-4 h-4" }),
-              /* @__PURE__ */ jsx("span", { className: "hidden sm:inline", children: "\u05D9\u05E6\u05D9\u05D0\u05D4" })
-            ]
+            posts,
+            savePosts,
+            clientUsers,
+            getBusinessColor,
+            currentUser: user
           }
         )
       ] })
-    ] }) }) }),
-    /* @__PURE__ */ jsxs("div", { className: "max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6", children: [
-      activeView === "posts" && /* @__PURE__ */ jsx(
-        PostsView,
-        {
-          posts,
-          savePosts,
-          businesses,
-          selectedBusiness,
-          setSelectedBusiness,
-          viewMode,
-          setViewMode,
-          currentMonth,
-          setCurrentMonth,
-          searchTerm,
-          setSearchTerm,
-          selectedPost,
-          setSelectedPost,
-          showPostModal,
-          setShowPostModal,
-          editingPost,
-          setEditingPost,
-          getBusinessColor,
-          isAdmin: true,
-          currentUser: user,
-          clientUsers,
-          allUsers: users,
-          templates,
-          saveTemplates
-        }
-      ),
-      activeView === "users" && /* @__PURE__ */ jsx(
-        UsersView,
-        {
-          users,
-          saveUsers,
-          posts,
-          showUserModal,
-          setShowUserModal,
-          editingUser,
-          setEditingUser,
-          getBusinessColor,
-          branding,
-          filterRole: "client"
-        }
-      ),
-      activeView === "admins" && /* @__PURE__ */ jsx(
-        UsersView,
-        {
-          users,
-          saveUsers,
-          posts,
-          showUserModal,
-          setShowUserModal,
-          editingUser,
-          setEditingUser,
-          getBusinessColor,
-          branding,
-          filterRole: "admin",
-          currentUser: user
-        }
-      ),
-      activeView === "publish" && /* @__PURE__ */ jsx(
-        PublishView,
-        {
-          posts,
-          savePosts,
-          clientUsers,
-          getBusinessColor,
-          currentUser: user
-        }
-      )
     ] }),
     showBrandingModal && /* @__PURE__ */ jsx("div", { className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4", onClick: () => setShowBrandingModal(false), children: /* @__PURE__ */ jsxs("div", { className: "bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto", onClick: (e) => e.stopPropagation(), dir: "rtl", children: [
       /* @__PURE__ */ jsxs("div", { className: "sticky top-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between", children: [
