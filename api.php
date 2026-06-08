@@ -52,6 +52,30 @@ try {
     exit;
 }
 
+// ----- AUTO-MIGRATION: Ensure required columns exist -----
+// This runs ONCE per session, adds missing columns silently
+// Safe: only adds columns if they don't exist, never removes/modifies existing data
+try {
+    // Check if posts table has the carousel columns
+    $stmt = $pdo->query("SHOW COLUMNS FROM posts LIKE 'isCarousel'");
+    if ($stmt->rowCount() === 0) {
+        // Add isCarousel column
+        $pdo->exec("ALTER TABLE posts ADD COLUMN `isCarousel` TINYINT(1) DEFAULT 0 COMMENT 'True if post is a carousel'");
+        error_log("[bidernet] Added column: posts.isCarousel");
+    }
+    
+    $stmt = $pdo->query("SHOW COLUMNS FROM posts LIKE 'mediaItems'");
+    if ($stmt->rowCount() === 0) {
+        // Add mediaItems column
+        $pdo->exec("ALTER TABLE posts ADD COLUMN `mediaItems` LONGTEXT COMMENT 'JSON array of carousel media items'");
+        error_log("[bidernet] Added column: posts.mediaItems");
+    }
+} catch (PDOException $e) {
+    // Migration failed - log it but don't break the API
+    // The error will surface on first save attempt if columns are truly missing
+    error_log("[bidernet] Auto-migration warning: " . $e->getMessage());
+}
+
 // ----- Parse Request -----
 $method = $_SERVER['REQUEST_METHOD'];
 $action = isset($_GET['action']) ? $_GET['action'] : '';
@@ -204,48 +228,103 @@ try {
                 // Carousel support
                 $isCarousel = !empty($input['isCarousel']) ? 1 : 0;
                 $mediaItems = isset($input['mediaItems']) ? json_encode($input['mediaItems'], JSON_UNESCAPED_UNICODE) : null;
+                
+                // Check which columns exist (defensive against missing columns)
+                $existingCols = [];
+                try {
+                    $colStmt = $pdo->query("SHOW COLUMNS FROM posts");
+                    while ($colRow = $colStmt->fetch()) {
+                        $existingCols[$colRow['Field']] = true;
+                    }
+                } catch (PDOException $e) {
+                    $existingCols = []; // fallback
+                }
+                $hasCarouselCols = isset($existingCols['isCarousel']) && isset($existingCols['mediaItems']);
 
-                $stmt = $pdo->prepare("
-                    INSERT INTO posts (id, businessName, title, content, date, time, platforms,
-                                       mediaUrl, mediaData, mediaName, mediaType, isCarousel, mediaItems, category,
-                                       status, clientApproval, publishStatus, publishedAt, publishedTo,
-                                       chatMessages, editHistory, createdBy)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                      businessName=VALUES(businessName), title=VALUES(title), content=VALUES(content),
-                      date=VALUES(date), time=VALUES(time), platforms=VALUES(platforms),
-                      mediaUrl=VALUES(mediaUrl), mediaData=VALUES(mediaData),
-                      mediaName=VALUES(mediaName), mediaType=VALUES(mediaType),
-                      isCarousel=VALUES(isCarousel), mediaItems=VALUES(mediaItems),
-                      category=VALUES(category), status=VALUES(status),
-                      clientApproval=VALUES(clientApproval), publishStatus=VALUES(publishStatus),
-                      publishedAt=VALUES(publishedAt), publishedTo=VALUES(publishedTo),
-                      chatMessages=VALUES(chatMessages), editHistory=VALUES(editHistory)
-                ");
-                $stmt->execute([
-                    $id,
-                    $input['businessName'] ?? '',
-                    $input['title'] ?? null,
-                    $input['content'] ?? null,
-                    $input['date'] ?? null,
-                    $input['time'] ?? null,
-                    $platforms,
-                    $input['mediaUrl'] ?? null,
-                    $input['mediaData'] ?? null,
-                    $input['mediaName'] ?? null,
-                    $input['mediaType'] ?? null,
-                    $isCarousel,
-                    $mediaItems,
-                    $input['category'] ?? null,
-                    $input['status'] ?? 'draft',
-                    $approval,
-                    $input['publishStatus'] ?? null,
-                    $input['publishedAt'] ?? null,
-                    $publishedTo,
-                    $chatMessages,
-                    $editHistory,
-                    $input['createdBy'] ?? null
-                ]);
+                if ($hasCarouselCols) {
+                    // Full INSERT with carousel columns
+                    $stmt = $pdo->prepare("
+                        INSERT INTO posts (id, businessName, title, content, date, time, platforms,
+                                           mediaUrl, mediaData, mediaName, mediaType, isCarousel, mediaItems, category,
+                                           status, clientApproval, publishStatus, publishedAt, publishedTo,
+                                           chatMessages, editHistory, createdBy)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                          businessName=VALUES(businessName), title=VALUES(title), content=VALUES(content),
+                          date=VALUES(date), time=VALUES(time), platforms=VALUES(platforms),
+                          mediaUrl=VALUES(mediaUrl), mediaData=VALUES(mediaData),
+                          mediaName=VALUES(mediaName), mediaType=VALUES(mediaType),
+                          isCarousel=VALUES(isCarousel), mediaItems=VALUES(mediaItems),
+                          category=VALUES(category), status=VALUES(status),
+                          clientApproval=VALUES(clientApproval), publishStatus=VALUES(publishStatus),
+                          publishedAt=VALUES(publishedAt), publishedTo=VALUES(publishedTo),
+                          chatMessages=VALUES(chatMessages), editHistory=VALUES(editHistory)
+                    ");
+                    $stmt->execute([
+                        $id,
+                        $input['businessName'] ?? '',
+                        $input['title'] ?? null,
+                        $input['content'] ?? null,
+                        $input['date'] ?? null,
+                        $input['time'] ?? null,
+                        $platforms,
+                        $input['mediaUrl'] ?? null,
+                        $input['mediaData'] ?? null,
+                        $input['mediaName'] ?? null,
+                        $input['mediaType'] ?? null,
+                        $isCarousel,
+                        $mediaItems,
+                        $input['category'] ?? null,
+                        $input['status'] ?? 'draft',
+                        $approval,
+                        $input['publishStatus'] ?? null,
+                        $input['publishedAt'] ?? null,
+                        $publishedTo,
+                        $chatMessages,
+                        $editHistory,
+                        $input['createdBy'] ?? null
+                    ]);
+                } else {
+                    // Fallback: INSERT without carousel columns (for legacy DBs)
+                    $stmt = $pdo->prepare("
+                        INSERT INTO posts (id, businessName, title, content, date, time, platforms,
+                                           mediaUrl, mediaData, mediaName, mediaType, category,
+                                           status, clientApproval, publishStatus, publishedAt, publishedTo,
+                                           chatMessages, editHistory, createdBy)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                          businessName=VALUES(businessName), title=VALUES(title), content=VALUES(content),
+                          date=VALUES(date), time=VALUES(time), platforms=VALUES(platforms),
+                          mediaUrl=VALUES(mediaUrl), mediaData=VALUES(mediaData),
+                          mediaName=VALUES(mediaName), mediaType=VALUES(mediaType),
+                          category=VALUES(category), status=VALUES(status),
+                          clientApproval=VALUES(clientApproval), publishStatus=VALUES(publishStatus),
+                          publishedAt=VALUES(publishedAt), publishedTo=VALUES(publishedTo),
+                          chatMessages=VALUES(chatMessages), editHistory=VALUES(editHistory)
+                    ");
+                    $stmt->execute([
+                        $id,
+                        $input['businessName'] ?? '',
+                        $input['title'] ?? null,
+                        $input['content'] ?? null,
+                        $input['date'] ?? null,
+                        $input['time'] ?? null,
+                        $platforms,
+                        $input['mediaUrl'] ?? null,
+                        $input['mediaData'] ?? null,
+                        $input['mediaName'] ?? null,
+                        $input['mediaType'] ?? null,
+                        $input['category'] ?? null,
+                        $input['status'] ?? 'draft',
+                        $approval,
+                        $input['publishStatus'] ?? null,
+                        $input['publishedAt'] ?? null,
+                        $publishedTo,
+                        $chatMessages,
+                        $editHistory,
+                        $input['createdBy'] ?? null
+                    ]);
+                }
                 respond(['ok' => true, 'id' => $id]);
             }
             if ($method === 'DELETE') {
@@ -415,7 +494,7 @@ try {
 
         // ============== PING (test endpoint) ==============
         case 'ping':
-            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.8.2-php']);
+            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.8.3-php']);
             break;
 
         default:
