@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.7.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} NEW: Grid view - 4 cards per row", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.8.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} NEW: Carousel posts + 4:5 aspect ratio", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -3214,14 +3214,18 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
     mediaType: post?.mediaType || null,
     mediaData: post?.mediaData || null,
     mediaName: post?.mediaName || "",
+    isCarousel: post?.isCarousel || false,
+    mediaItems: post?.mediaItems || [],
     status: post?.status || "scheduled",
     platforms: post?.platforms || ["facebook", "instagram"],
     category: post?.category || "content"
   });
   const fileInputRef = useRef(null);
+  const carouselInputRef = useRef(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [saving, setSaving] = useState(false);
+  
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -3235,6 +3239,98 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
       setFormData({ ...formData, mediaType, mediaData: event.target.result, mediaName: file.name });
     };
     reader.readAsDataURL(file);
+  };
+  
+  // Handle multiple file upload for carousel
+  const handleCarouselUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    
+    // Check current count + new files won't exceed 10
+    const currentCount = formData.mediaItems.length;
+    const remaining = 10 - currentCount;
+    if (remaining <= 0) {
+      alert("\u05D0\u05E4\u05E9\u05E8 \u05DC\u05D4\u05D5\u05E1\u05D9\u05E3 \u05E2\u05D3 10 \u05EA\u05DE\u05D5\u05E0\u05D5\u05EA \u05DC\u05E7\u05E8\u05D5\u05E1\u05DC\u05D4");
+      return;
+    }
+    const filesToProcess = files.slice(0, remaining);
+    if (files.length > remaining) {
+      alert(`\u05E0\u05D9\u05EA\u05DF \u05DC\u05D4\u05D5\u05E1\u05D9\u05E3 \u05E2\u05D5\u05D3 ${remaining} \u05EA\u05DE\u05D5\u05E0\u05D5\u05EA \u05D1\u05DC\u05D1\u05D3`);
+    }
+    
+    // Check file sizes
+    for (const file of filesToProcess) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`\u05D4\u05E7\u05D5\u05D1\u05E5 ${file.name} \u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9. \u05E2\u05D3 5MB \u05DC\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D1\u05E7\u05E8\u05D5\u05E1\u05DC\u05D4`);
+        return;
+      }
+    }
+    
+    // Read all files
+    const readPromises = filesToProcess.map(file => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          resolve({
+            type: file.type.startsWith("video") ? "video" : "image",
+            data: event.target.result,
+            name: file.name
+          });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    });
+    
+    Promise.all(readPromises).then(items => {
+      setFormData({
+        ...formData,
+        mediaItems: [...formData.mediaItems, ...items]
+      });
+    }).catch(err => {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D8\u05E2\u05D9\u05E0\u05EA \u05E7\u05D1\u05E6\u05D9\u05DD: " + err.message);
+    });
+    
+    // Reset input so same files can be selected again
+    e.target.value = '';
+  };
+  
+  const removeCarouselItem = (index) => {
+    const newItems = formData.mediaItems.filter((_, i) => i !== index);
+    setFormData({ ...formData, mediaItems: newItems });
+  };
+  
+  const moveCarouselItem = (index, direction) => {
+    const newItems = [...formData.mediaItems];
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= newItems.length) return;
+    [newItems[index], newItems[targetIndex]] = [newItems[targetIndex], newItems[index]];
+    setFormData({ ...formData, mediaItems: newItems });
+  };
+  
+  const toggleCarouselMode = () => {
+    if (formData.isCarousel) {
+      // Switching from carousel to regular
+      if (formData.mediaItems.length > 0 && !confirm("\u05DC\u05E2\u05D1\u05D5\u05E8 \u05DC\u05E4\u05D5\u05E1\u05D8 \u05E8\u05D2\u05D9\u05DC? \u05D4\u05EA\u05DE\u05D5\u05E0\u05D5\u05EA \u05D1\u05E7\u05E8\u05D5\u05E1\u05DC\u05D4 \u05D9\u05D9\u05DE\u05D7\u05E7\u05D5")) return;
+      setFormData({ ...formData, isCarousel: false, mediaItems: [] });
+    } else {
+      // Switching from regular to carousel
+      if (formData.mediaData && !confirm("\u05DC\u05E2\u05D1\u05D5\u05E8 \u05DC\u05E7\u05E8\u05D5\u05E1\u05DC\u05D4? \u05D4\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D4\u05E0\u05D5\u05DB\u05D7\u05D9\u05EA \u05ea\u05d5\u05e2\u05d1\u05e8 \u05dc\u05e7\u05e8\u05d5\u05e1\u05dc\u05d4")) return;
+      // Move existing media to first carousel item if any
+      const items = formData.mediaData ? [{
+        type: formData.mediaType,
+        data: formData.mediaData,
+        name: formData.mediaName || ""
+      }] : [];
+      setFormData({
+        ...formData,
+        isCarousel: true,
+        mediaItems: items,
+        mediaData: null,
+        mediaType: null,
+        mediaName: ""
+      });
+    }
   };
   const handleSave = async () => {
     if (!formData.businessName.trim() || !formData.date || !formData.content.trim()) {
@@ -3385,18 +3481,112 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
           /* @__PURE__ */ jsx(SmartCharCounter, { content: formData.content, platforms: formData.platforms })
         ] }),
         /* @__PURE__ */ jsxs("div", { children: [
-          /* @__PURE__ */ jsx("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: "\u05EA\u05DE\u05D5\u05E0\u05D4 / \u05D5\u05D9\u05D3\u05D0\u05D5 (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)" }),
-          formData.mediaData ? /* @__PURE__ */ jsxs("div", { className: "relative", children: [
-            formData.mediaType === "image" ? /* @__PURE__ */ jsx("img", { src: formData.mediaData, alt: "", className: "w-full max-h-64 object-cover rounded-lg" }) : /* @__PURE__ */ jsx("video", { src: formData.mediaData, controls: true, className: "w-full max-h-64 rounded-lg bg-black" }),
-            /* @__PURE__ */ jsx("button", { type: "button", onClick: () => setFormData({ ...formData, mediaType: null, mediaData: null, mediaName: "" }), className: "absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-white rounded-lg shadow-md transition", children: /* @__PURE__ */ jsx(Trash2, { className: "w-4 h-4 text-red-500" }) }),
-            /* @__PURE__ */ jsx("div", { className: "mt-2 text-xs text-slate-500 truncate", children: formData.mediaName })
-          ] }) : /* @__PURE__ */ jsxs("div", { onClick: () => fileInputRef.current?.click(), className: "border-2 border-dashed border-slate-300 rounded-lg py-3 px-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition flex items-center justify-center gap-3", children: [
-            /* @__PURE__ */ jsx(Upload, { className: "w-5 h-5 text-slate-400 flex-shrink-0" }),
-            /* @__PURE__ */ jsxs("div", { className: "flex flex-col items-start sm:flex-row sm:items-center sm:gap-2", children: [
-              /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600 font-medium", children: "\u05DC\u05D7\u05E5 \u05DC\u05D4\u05E2\u05DC\u05D0\u05EA \u05E7\u05D5\u05D1\u05E5" }),
-              /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-400", children: "\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D0\u05D5 \u05D5\u05D9\u05D3\u05D0\u05D5 \xB7 \u05E2\u05D3 50MB" })
+          /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between mb-2", children: [
+            /* @__PURE__ */ jsx("label", { className: "block text-sm font-medium text-slate-700", children: "\u05EA\u05DE\u05D5\u05E0\u05D4 / \u05D5\u05D9\u05D3\u05D0\u05D5 (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)" }),
+            /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-1 bg-slate-100 rounded-lg p-0.5", children: [
+              /* @__PURE__ */ jsx("button", {
+                type: "button",
+                onClick: () => { if (formData.isCarousel) toggleCarouselMode(); },
+                className: `px-3 py-1 text-xs font-medium rounded-md transition ${!formData.isCarousel ? "bg-white shadow-sm text-slate-900" : "text-slate-600 hover:text-slate-900"}`,
+                children: "\u05E4\u05D5\u05E1\u05D8 \u05E8\u05D2\u05D9\u05DC"
+              }),
+              /* @__PURE__ */ jsxs("button", {
+                type: "button",
+                onClick: () => { if (!formData.isCarousel) toggleCarouselMode(); },
+                className: `px-3 py-1 text-xs font-medium rounded-md transition flex items-center gap-1 ${formData.isCarousel ? "bg-white shadow-sm text-slate-900" : "text-slate-600 hover:text-slate-900"}`,
+                children: [
+                  /* @__PURE__ */ jsx(Copy, { className: "w-3 h-3" }),
+                  "\u05E7\u05E8\u05D5\u05E1\u05DC\u05D4"
+                ]
+              })
             ] })
           ] }),
+          
+          // Carousel mode UI
+          formData.isCarousel ? /* @__PURE__ */ jsxs("div", { className: "space-y-3", children: [
+            // Carousel items grid
+            formData.mediaItems.length > 0 && /* @__PURE__ */ jsx("div", {
+              className: "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2",
+              children: formData.mediaItems.map((item, idx) => /* @__PURE__ */ jsxs("div", {
+                key: idx,
+                className: "relative group rounded-lg overflow-hidden border-2 border-slate-200 bg-slate-50",
+                style: { paddingBottom: "125%" },
+                children: [
+                  // Image/video preview
+                  item.type === "image"
+                    ? /* @__PURE__ */ jsx("img", { src: item.data, alt: "", className: "absolute inset-0 w-full h-full object-cover" })
+                    : /* @__PURE__ */ jsxs("div", {
+                        className: "absolute inset-0 bg-slate-900 flex items-center justify-center",
+                        children: [
+                          /* @__PURE__ */ jsx("video", { src: item.data, className: "w-full h-full object-cover" }),
+                          /* @__PURE__ */ jsx(Video, { className: "w-6 h-6 text-white absolute" })
+                        ]
+                      }),
+                  // Position number
+                  /* @__PURE__ */ jsx("div", {
+                    className: "absolute top-1 right-1 bg-black/70 text-white text-xs font-bold px-1.5 py-0.5 rounded",
+                    children: idx + 1
+                  }),
+                  // Delete button
+                  /* @__PURE__ */ jsx("button", {
+                    type: "button",
+                    onClick: () => removeCarouselItem(idx),
+                    className: "absolute top-1 left-1 p-1 bg-red-500/90 hover:bg-red-600 text-white rounded shadow opacity-0 group-hover:opacity-100 transition",
+                    title: "\u05DE\u05D7\u05E7",
+                    children: /* @__PURE__ */ jsx(X, { className: "w-3 h-3" })
+                  }),
+                  // Move arrows
+                  /* @__PURE__ */ jsxs("div", {
+                    className: "absolute bottom-1 inset-x-1 flex justify-between opacity-0 group-hover:opacity-100 transition",
+                    children: [
+                      /* @__PURE__ */ jsx("button", {
+                        type: "button",
+                        onClick: () => moveCarouselItem(idx, -1),
+                        disabled: idx === 0,
+                        className: "p-1 bg-white/95 hover:bg-white rounded shadow disabled:opacity-30",
+                        title: "\u05D4\u05D6\u05D6 \u05D0\u05D7\u05D5\u05E8\u05D4",
+                        children: /* @__PURE__ */ jsx(ChevronRight, { className: "w-3 h-3 text-slate-700" })
+                      }),
+                      /* @__PURE__ */ jsx("button", {
+                        type: "button",
+                        onClick: () => moveCarouselItem(idx, 1),
+                        disabled: idx === formData.mediaItems.length - 1,
+                        className: "p-1 bg-white/95 hover:bg-white rounded shadow disabled:opacity-30",
+                        title: "\u05D4\u05D6\u05D6 \u05E7\u05D3\u05D9\u05DE\u05D4",
+                        children: /* @__PURE__ */ jsx(ChevronLeft, { className: "w-3 h-3 text-slate-700" })
+                      })
+                    ]
+                  })
+                ]
+              }))
+            }),
+            // Add more button
+            formData.mediaItems.length < 10 && /* @__PURE__ */ jsxs("div", {
+              onClick: () => carouselInputRef.current?.click(),
+              className: "border-2 border-dashed border-slate-300 rounded-lg py-4 px-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition flex items-center justify-center gap-3",
+              children: [
+                /* @__PURE__ */ jsx(Upload, { className: "w-5 h-5 text-slate-400 flex-shrink-0" }),
+                /* @__PURE__ */ jsxs("div", { className: "flex flex-col items-start", children: [
+                  /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600 font-medium", children: "\u05D4\u05D5\u05E1\u05E3 \u05EA\u05DE\u05D5\u05E0\u05D5\u05EA \u05DC\u05E7\u05E8\u05D5\u05E1\u05DC\u05D4" }),
+                  /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-400", children: `${formData.mediaItems.length} / 10 \u00B7 \u05E2\u05D3 5MB \u05DC\u05EA\u05DE\u05D5\u05E0\u05D4` })
+                ] })
+              ]
+            }),
+            /* @__PURE__ */ jsx("input", { ref: carouselInputRef, type: "file", accept: "image/*,video/*", multiple: true, onChange: handleCarouselUpload, className: "hidden" })
+          ] }) : (
+            // Regular single media UI
+            formData.mediaData ? /* @__PURE__ */ jsxs("div", { className: "relative", children: [
+              formData.mediaType === "image" ? /* @__PURE__ */ jsx("img", { src: formData.mediaData, alt: "", className: "w-full max-h-64 object-cover rounded-lg" }) : /* @__PURE__ */ jsx("video", { src: formData.mediaData, controls: true, className: "w-full max-h-64 rounded-lg bg-black" }),
+              /* @__PURE__ */ jsx("button", { type: "button", onClick: () => setFormData({ ...formData, mediaType: null, mediaData: null, mediaName: "" }), className: "absolute top-2 left-2 p-1.5 bg-white/90 hover:bg-white rounded-lg shadow-md transition", children: /* @__PURE__ */ jsx(Trash2, { className: "w-4 h-4 text-red-500" }) }),
+              /* @__PURE__ */ jsx("div", { className: "mt-2 text-xs text-slate-500 truncate", children: formData.mediaName })
+            ] }) : /* @__PURE__ */ jsxs("div", { onClick: () => fileInputRef.current?.click(), className: "border-2 border-dashed border-slate-300 rounded-lg py-3 px-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition flex items-center justify-center gap-3", children: [
+              /* @__PURE__ */ jsx(Upload, { className: "w-5 h-5 text-slate-400 flex-shrink-0" }),
+              /* @__PURE__ */ jsxs("div", { className: "flex flex-col items-start sm:flex-row sm:items-center sm:gap-2", children: [
+                /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-600 font-medium", children: "\u05DC\u05D7\u05E5 \u05DC\u05D4\u05E2\u05DC\u05D0\u05EA \u05E7\u05D5\u05D1\u05E5" }),
+                /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-400", children: "\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D0\u05D5 \u05D5\u05D9\u05D3\u05D0\u05D5 \xB7 \u05E2\u05D3 50MB" })
+              ] })
+            ] })
+          ),
           /* @__PURE__ */ jsx("input", { ref: fileInputRef, type: "file", accept: "image/*,video/*", onChange: handleFileUpload, className: "hidden" })
         ] })
       ] }),
@@ -3500,22 +3690,28 @@ function AdminPostCard({ post, onEdit, onDelete, onView, onDuplicate, businessCo
   } else if (approval?.status === "rejected") {
     sideBorder = "border-r-4 border-rose-500";
   }
+  // Determine which media to show (carousel takes priority)
+  const firstCarouselItem = post.isCarousel && post.mediaItems && post.mediaItems.length > 0 ? post.mediaItems[0] : null;
+  const showCarousel = post.isCarousel && post.mediaItems && post.mediaItems.length > 1;
+  const displayMediaData = firstCarouselItem?.data || post.mediaData;
+  const displayMediaType = firstCarouselItem?.type || post.mediaType;
+  
   return /* @__PURE__ */ jsxs(
     "div",
     {
       className: `bg-white rounded-xl border border-slate-200 overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group ${sideBorder} flex flex-col`,
       onClick: () => onView(post),
       children: [
-        /* @__PURE__ */ jsxs("div", { className: "relative w-full", style: { paddingBottom: "56.25%" }, children: [
-          post.mediaData ? post.mediaType === "image" ? /* @__PURE__ */ jsx(
+        /* @__PURE__ */ jsxs("div", { className: "relative w-full", style: { paddingBottom: "125%" }, children: [
+          displayMediaData ? displayMediaType === "image" ? /* @__PURE__ */ jsx(
             "img",
             {
-              src: post.mediaData,
+              src: displayMediaData,
               alt: "",
               className: "absolute inset-0 w-full h-full object-cover"
             }
           ) : /* @__PURE__ */ jsxs("div", { className: "absolute inset-0 bg-slate-900 flex items-center justify-center", children: [
-            /* @__PURE__ */ jsx("video", { src: post.mediaData, className: "w-full h-full object-cover" }),
+            /* @__PURE__ */ jsx("video", { src: displayMediaData, className: "w-full h-full object-cover" }),
             /* @__PURE__ */ jsx(Video, { className: "w-8 h-8 text-white absolute opacity-90" })
           ] }) : /* @__PURE__ */ jsx(
             "div",
@@ -3525,6 +3721,14 @@ function AdminPostCard({ post, onEdit, onDelete, onView, onDuplicate, businessCo
               children: /* @__PURE__ */ jsx("div", { className: "text-5xl", style: { opacity: 0.6 }, children: category.icon })
             }
           ),
+          // Carousel badge - shows count of images
+          showCarousel && /* @__PURE__ */ jsxs("div", {
+            className: "absolute top-2 right-12 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm",
+            children: [
+              /* @__PURE__ */ jsx(Copy, { className: "w-3 h-3" }),
+              `1/${post.mediaItems.length}`
+            ]
+          }),
           /* @__PURE__ */ jsxs("div", { className: "absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition", children: [
             onDuplicate && /* @__PURE__ */ jsx(
               "button",
@@ -3628,22 +3832,28 @@ function ClientPostCard({ post, onClick }) {
   } else if (approval?.status === "rejected") {
     sideBorder = "border-r-4 border-rose-500";
   }
+  // Determine which media to show (carousel takes priority)
+  const firstCarouselItem = post.isCarousel && post.mediaItems && post.mediaItems.length > 0 ? post.mediaItems[0] : null;
+  const showCarousel = post.isCarousel && post.mediaItems && post.mediaItems.length > 1;
+  const displayMediaData = firstCarouselItem?.data || post.mediaData;
+  const displayMediaType = firstCarouselItem?.type || post.mediaType;
+  
   return /* @__PURE__ */ jsxs(
     "div",
     {
       className: `bg-white rounded-xl border border-slate-200 overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${sideBorder} flex flex-col`,
       onClick,
       children: [
-        /* @__PURE__ */ jsxs("div", { className: "relative w-full", style: { paddingBottom: "56.25%" }, children: [
-          post.mediaData ? post.mediaType === "image" ? /* @__PURE__ */ jsx(
+        /* @__PURE__ */ jsxs("div", { className: "relative w-full", style: { paddingBottom: "125%" }, children: [
+          displayMediaData ? displayMediaType === "image" ? /* @__PURE__ */ jsx(
             "img",
             {
-              src: post.mediaData,
+              src: displayMediaData,
               alt: "",
               className: "absolute inset-0 w-full h-full object-cover"
             }
           ) : /* @__PURE__ */ jsxs("div", { className: "absolute inset-0 bg-slate-900 flex items-center justify-center", children: [
-            /* @__PURE__ */ jsx("video", { src: post.mediaData, className: "w-full h-full object-cover" }),
+            /* @__PURE__ */ jsx("video", { src: displayMediaData, className: "w-full h-full object-cover" }),
             /* @__PURE__ */ jsx(Video, { className: "w-8 h-8 text-white absolute opacity-90" })
           ] }) : /* @__PURE__ */ jsx(
             "div",
@@ -3653,6 +3863,14 @@ function ClientPostCard({ post, onClick }) {
               children: /* @__PURE__ */ jsx("div", { className: "text-5xl", style: { opacity: 0.6 }, children: category.icon })
             }
           ),
+          // Carousel badge
+          showCarousel && /* @__PURE__ */ jsxs("div", {
+            className: "absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm",
+            children: [
+              /* @__PURE__ */ jsx(Copy, { className: "w-3 h-3" }),
+              `1/${post.mediaItems.length}`
+            ]
+          }),
           /* @__PURE__ */ jsxs("div", { className: "absolute top-2 right-2", children: [
             !approval && /* @__PURE__ */ jsxs("span", { className: "px-2 py-0.5 rounded text-xs font-medium bg-amber-100/95 text-amber-800 flex items-center gap-1 shadow-sm", children: [
               /* @__PURE__ */ jsx(Clock, { className: "w-3 h-3" }),
@@ -3702,6 +3920,70 @@ function ClientPostCard({ post, onClick }) {
     }
   );
 }
+function PostMediaGallery({ post }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  
+  // Determine what to show
+  const isCarousel = post.isCarousel && post.mediaItems && post.mediaItems.length > 0;
+  const items = isCarousel ? post.mediaItems : (post.mediaData ? [{ type: post.mediaType, data: post.mediaData, name: post.mediaName }] : []);
+  
+  if (items.length === 0) return null;
+  
+  const total = items.length;
+  const current = items[currentIndex] || items[0];
+  
+  const next = (e) => {
+    if (e) e.stopPropagation();
+    setCurrentIndex((currentIndex + 1) % total);
+  };
+  const prev = (e) => {
+    if (e) e.stopPropagation();
+    setCurrentIndex((currentIndex - 1 + total) % total);
+  };
+  
+  return /* @__PURE__ */ jsxs("div", { 
+    className: "rounded-xl overflow-hidden bg-slate-900 relative",
+    children: [
+      // Media display
+      current.type === "image" 
+        ? /* @__PURE__ */ jsx("img", { src: current.data, alt: "", className: "w-full max-h-[500px] object-contain bg-slate-100" })
+        : /* @__PURE__ */ jsx("video", { src: current.data, controls: true, className: "w-full max-h-[500px] bg-black" }),
+      
+      // Carousel controls - only show if multiple items
+      total > 1 && /* @__PURE__ */ jsxs(Fragment, { children: [
+        // Previous button (right side for RTL)
+        /* @__PURE__ */ jsx("button", {
+          onClick: prev,
+          className: "absolute top-1/2 right-2 -translate-y-1/2 p-2 bg-white/90 hover:bg-white rounded-full shadow-lg transition",
+          title: "\u05E7\u05D5\u05D3\u05DD",
+          children: /* @__PURE__ */ jsx(ChevronRight, { className: "w-5 h-5 text-slate-700" })
+        }),
+        // Next button (left side for RTL)
+        /* @__PURE__ */ jsx("button", {
+          onClick: next,
+          className: "absolute top-1/2 left-2 -translate-y-1/2 p-2 bg-white/90 hover:bg-white rounded-full shadow-lg transition",
+          title: "\u05D4\u05D1\u05D0",
+          children: /* @__PURE__ */ jsx(ChevronLeft, { className: "w-5 h-5 text-slate-700" })
+        }),
+        // Counter (top)
+        /* @__PURE__ */ jsx("div", {
+          className: "absolute top-3 right-3 bg-black/70 text-white text-xs font-bold px-2.5 py-1 rounded-full",
+          children: `${currentIndex + 1} / ${total}`
+        }),
+        // Navigation dots (bottom)
+        /* @__PURE__ */ jsx("div", {
+          className: "absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/40 rounded-full px-2 py-1",
+          children: items.map((_, idx) => /* @__PURE__ */ jsx("button", {
+            onClick: (e) => { e.stopPropagation(); setCurrentIndex(idx); },
+            className: `transition-all rounded-full ${idx === currentIndex ? "w-6 h-2 bg-white" : "w-2 h-2 bg-white/60 hover:bg-white/80"}`,
+            "aria-label": `\u05ea\u05de\u05d5\u05e0\u05d4 ${idx + 1}`
+          }, idx))
+        })
+      ] })
+    ]
+  });
+}
+
 function ClientPostModal({ post, onClose, onApprove, onReject, onEditPost, currentUserName }) {
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [actionType, setActionType] = useState(null);
@@ -3881,7 +4163,8 @@ function ClientPostModal({ post, onClose, onApprove, onReject, onEditPost, curre
           )
         ] })
       ] }),
-      post.mediaData && /* @__PURE__ */ jsx("div", { className: "rounded-xl overflow-hidden bg-slate-100", children: post.mediaType === "image" ? /* @__PURE__ */ jsx("img", { src: post.mediaData, alt: "", className: "w-full" }) : /* @__PURE__ */ jsx("video", { src: post.mediaData, controls: true, className: "w-full" }) }),
+      // Media gallery (supports carousel)
+      (post.mediaData || (post.isCarousel && post.mediaItems?.length > 0)) && /* @__PURE__ */ jsx(PostMediaGallery, { post }),
       showCommentBox && /* @__PURE__ */ jsxs("div", { className: `border-2 rounded-lg p-4 ${actionType === "approve" ? "border-emerald-300 bg-emerald-50" : "border-rose-300 bg-rose-50"}`, children: [
         /* @__PURE__ */ jsx("label", { className: "block text-sm font-semibold text-slate-800 mb-2", children: actionType === "approve" ? "\u2713 \u05D0\u05D9\u05E9\u05D5\u05E8 \u05E4\u05D5\u05E1\u05D8 - \u05D4\u05E2\u05E8\u05D4 (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)" : "\u26A0 \u05DE\u05D4 \u05EA\u05E8\u05E6\u05D4 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D1\u05E4\u05D5\u05E1\u05D8?" }),
         /* @__PURE__ */ jsx(
@@ -3995,7 +4278,8 @@ function AdminPostViewModal({ post, onClose, onEdit, onDelete, onDuplicate, busi
       ] }),
       post.title && /* @__PURE__ */ jsx("h3", { className: "text-xl font-bold text-slate-900", children: post.title }),
       /* @__PURE__ */ jsx("div", { className: "text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-4 border border-slate-100", dangerouslySetInnerHTML: { __html: post.content } }),
-      post.mediaData && /* @__PURE__ */ jsx("div", { className: "rounded-xl overflow-hidden bg-slate-100", children: post.mediaType === "image" ? /* @__PURE__ */ jsx("img", { src: post.mediaData, alt: "", className: "w-full" }) : /* @__PURE__ */ jsx("video", { src: post.mediaData, controls: true, className: "w-full" }) }),
+      // Media gallery (supports carousel)
+      (post.mediaData || (post.isCarousel && post.mediaItems?.length > 0)) && /* @__PURE__ */ jsx(PostMediaGallery, { post }),
       post.clientApproval?.comment && /* @__PURE__ */ jsxs("div", { className: `rounded-lg p-3 border ${post.clientApproval.status === "approved" ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}`, children: [
         /* @__PURE__ */ jsxs("div", { className: "text-xs font-semibold mb-1 flex items-center gap-1.5", children: [
           /* @__PURE__ */ jsx(MessageSquare, { className: "w-3.5 h-3.5" }),

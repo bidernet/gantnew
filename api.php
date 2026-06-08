@@ -180,6 +180,13 @@ try {
                         $row['editHistory'] = $row['history'];
                     }
                     if ($row['publishedTo']) $row['publishedTo'] = json_decode($row['publishedTo'], true);
+                    // Carousel fields
+                    if (isset($row['mediaItems']) && $row['mediaItems']) {
+                        $row['mediaItems'] = json_decode($row['mediaItems'], true);
+                    }
+                    if (isset($row['isCarousel'])) {
+                        $row['isCarousel'] = (bool)$row['isCarousel'];
+                    }
                 }
                 respond($rows);
             }
@@ -194,18 +201,22 @@ try {
                 $historyInput = $input['history'] ?? $input['editHistory'] ?? null;
                 $editHistory = $historyInput !== null ? json_encode($historyInput, JSON_UNESCAPED_UNICODE) : null;
                 $publishedTo = isset($input['publishedTo']) ? json_encode($input['publishedTo'], JSON_UNESCAPED_UNICODE) : null;
+                // Carousel support
+                $isCarousel = !empty($input['isCarousel']) ? 1 : 0;
+                $mediaItems = isset($input['mediaItems']) ? json_encode($input['mediaItems'], JSON_UNESCAPED_UNICODE) : null;
 
                 $stmt = $pdo->prepare("
                     INSERT INTO posts (id, businessName, title, content, date, time, platforms,
-                                       mediaUrl, mediaData, mediaName, mediaType, category,
+                                       mediaUrl, mediaData, mediaName, mediaType, isCarousel, mediaItems, category,
                                        status, clientApproval, publishStatus, publishedAt, publishedTo,
                                        chatMessages, editHistory, createdBy)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
                       businessName=VALUES(businessName), title=VALUES(title), content=VALUES(content),
                       date=VALUES(date), time=VALUES(time), platforms=VALUES(platforms),
                       mediaUrl=VALUES(mediaUrl), mediaData=VALUES(mediaData),
                       mediaName=VALUES(mediaName), mediaType=VALUES(mediaType),
+                      isCarousel=VALUES(isCarousel), mediaItems=VALUES(mediaItems),
                       category=VALUES(category), status=VALUES(status),
                       clientApproval=VALUES(clientApproval), publishStatus=VALUES(publishStatus),
                       publishedAt=VALUES(publishedAt), publishedTo=VALUES(publishedTo),
@@ -223,6 +234,8 @@ try {
                     $input['mediaData'] ?? null,
                     $input['mediaName'] ?? null,
                     $input['mediaType'] ?? null,
+                    $isCarousel,
+                    $mediaItems,
                     $input['category'] ?? null,
                     $input['status'] ?? 'draft',
                     $approval,
@@ -402,7 +415,7 @@ try {
 
         // ============== PING (test endpoint) ==============
         case 'ping':
-            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.7.0-php']);
+            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.8.0-php']);
             break;
 
         default:

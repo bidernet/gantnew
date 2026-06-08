@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS `posts` (
   `mediaData` LONGTEXT COMMENT 'Base64 of uploaded image/video',
   `mediaName` VARCHAR(255),
   `mediaType` VARCHAR(20),
+  `isCarousel` TINYINT(1) DEFAULT 0 COMMENT 'True if post is a carousel with multiple media items',
+  `mediaItems` LONGTEXT COMMENT 'JSON array of carousel media items',
   `category` VARCHAR(100),
   `status` VARCHAR(50) DEFAULT 'draft',
   `clientApproval` TEXT,
@@ -119,5 +121,36 @@ VALUES (1, 'bidernet group', 'משרד פרסום דיגיטלי', '#deeece', '#
 ON DUPLICATE KEY UPDATE `id`=`id`;
 
 -- ============================================
--- סיום! 7 טבלאות נוצרו.
+-- MIGRATIONS - safe to run multiple times
+-- Adds carousel support to existing posts table
+-- ============================================
+
+-- Add isCarousel and mediaItems columns if they don't exist
+SET @dbname = DATABASE();
+SET @tablename = "posts";
+
+-- Add isCarousel column
+SET @columnname = "isCarousel";
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @columnname) > 0,
+  "SELECT 1",
+  CONCAT("ALTER TABLE ", @tablename, " ADD COLUMN `isCarousel` TINYINT(1) DEFAULT 0 COMMENT 'True if post is a carousel'")
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- Add mediaItems column
+SET @columnname = "mediaItems";
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @columnname) > 0,
+  "SELECT 1",
+  CONCAT("ALTER TABLE ", @tablename, " ADD COLUMN `mediaItems` LONGTEXT COMMENT 'JSON array of carousel media items'")
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- ============================================
+-- סיום! 7 טבלאות + carousel support
 -- ============================================
