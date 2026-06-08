@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.8.1-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} UPDATE: 5 cols grid + YouTube-style play icon", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.8.2-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} UPDATE: Smart video placeholder (Play icon)", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -192,6 +192,7 @@ function PlatformIcon({ id, size = 24 }) {
 }
 var POST_CATEGORIES = {
   content: { label: "\u05EA\u05D5\u05DB\u05DF", icon: "\u{1F4DD}", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", color: "#3B82F6" },
+  video: { label: "\u05D5\u05D9\u05D3\u05D0\u05D5/\u05E1\u05E8\u05D8\u05D5\u05DF", icon: "\u25B6", bg: "bg-red-50", text: "text-red-700", border: "border-red-200", color: "#EF4444" },
   promotion: { label: "\u05E4\u05E8\u05E1\u05D5\u05DE\u05EA", icon: "\u{1F3AF}", bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200", color: "#F43F5E" },
   story: { label: "\u05E1\u05D9\u05E4\u05D5\u05E8", icon: "\u{1F4AC}", bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", color: "#A855F7" },
   tip: { label: "\u05D8\u05D9\u05E4", icon: "\u{1F4A1}", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", color: "#F59E0B" },
@@ -3720,6 +3721,11 @@ function AdminPostCard({ post, onEdit, onDelete, onView, onDuplicate, businessCo
   const displayMediaData = firstCarouselItem?.data || post.mediaData;
   const displayMediaType = firstCarouselItem?.type || post.mediaType;
   
+  // Detect if post is a video (by category or keywords in title/content)
+  const titleAndContent = ((post.title || "") + " " + (post.content || "")).toLowerCase();
+  const isVideoPost = post.category === "video" || 
+    /\u05E1\u05E8\u05D8\u05D5\u05DF|\u05D5\u05D9\u05D3\u05D0\u05D5|\u05E7\u05DC\u05D9\u05E4|reel|video|youtube/i.test(titleAndContent);
+  
   return /* @__PURE__ */ jsxs(
     "div",
     {
@@ -3749,7 +3755,25 @@ function AdminPostCard({ post, onEdit, onDelete, onView, onDuplicate, businessCo
                 })
               })
             })
-          ] }) : /* @__PURE__ */ jsx(
+          ] }) : isVideoPost ? /* @__PURE__ */ jsxs("div", {
+            className: "absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center",
+            children: [
+              /* @__PURE__ */ jsx("div", {
+                className: "w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-2xl",
+                children: /* @__PURE__ */ jsx("svg", {
+                  className: "w-8 h-8 text-white",
+                  viewBox: "0 0 24 24",
+                  fill: "currentColor",
+                  style: { marginRight: "-3px" },
+                  children: /* @__PURE__ */ jsx("path", { d: "M8 5v14l11-7z" })
+                })
+              }),
+              /* @__PURE__ */ jsx("div", {
+                className: "absolute bottom-3 text-white/80 text-xs font-medium",
+                children: "\u05D5\u05D9\u05D3\u05D0\u05D5"
+              })
+            ]
+          }) : /* @__PURE__ */ jsx(
             "div",
             {
               className: "absolute inset-0 flex items-center justify-center",
@@ -3874,6 +3898,11 @@ function ClientPostCard({ post, onClick }) {
   const displayMediaData = firstCarouselItem?.data || post.mediaData;
   const displayMediaType = firstCarouselItem?.type || post.mediaType;
   
+  // Detect if post is a video (by category or keywords in title/content)
+  const titleAndContent = ((post.title || "") + " " + (post.content || "")).toLowerCase();
+  const isVideoPost = post.category === "video" || 
+    /\u05E1\u05E8\u05D8\u05D5\u05DF|\u05D5\u05D9\u05D3\u05D0\u05D5|\u05E7\u05DC\u05D9\u05E4|reel|video|youtube/i.test(titleAndContent);
+  
   return /* @__PURE__ */ jsxs(
     "div",
     {
@@ -3903,7 +3932,25 @@ function ClientPostCard({ post, onClick }) {
                 })
               })
             })
-          ] }) : /* @__PURE__ */ jsx(
+          ] }) : isVideoPost ? /* @__PURE__ */ jsxs("div", {
+            className: "absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center",
+            children: [
+              /* @__PURE__ */ jsx("div", {
+                className: "w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-2xl",
+                children: /* @__PURE__ */ jsx("svg", {
+                  className: "w-8 h-8 text-white",
+                  viewBox: "0 0 24 24",
+                  fill: "currentColor",
+                  style: { marginRight: "-3px" },
+                  children: /* @__PURE__ */ jsx("path", { d: "M8 5v14l11-7z" })
+                })
+              }),
+              /* @__PURE__ */ jsx("div", {
+                className: "absolute bottom-3 text-white/80 text-xs font-medium",
+                children: "\u05D5\u05D9\u05D3\u05D0\u05D5"
+              })
+            ]
+          }) : /* @__PURE__ */ jsx(
             "div",
             {
               className: "absolute inset-0 flex items-center justify-center",
