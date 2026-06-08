@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.8.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} NEW: Carousel posts + 4:5 aspect ratio", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.8.1-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} UPDATE: 5 cols grid + YouTube-style play icon", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -1968,7 +1968,7 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
           /* @__PURE__ */ jsx(Calendar, { className: "w-12 h-12 mx-auto mb-3 text-slate-300" }),
           /* @__PURE__ */ jsx("p", { className: "font-medium mb-1", children: "\u05D0\u05D9\u05DF \u05E4\u05D5\u05E1\u05D8\u05D9\u05DD \u05D1\u05D7\u05D5\u05D3\u05E9 \u05D6\u05D4" }),
           /* @__PURE__ */ jsx("p", { className: "text-xs", children: "\u05D4\u05E9\u05EA\u05DE\u05E9 \u05D1\u05D7\u05D9\u05E6\u05D9\u05DD \u05DC\u05E2\u05D9\u05DC \u05DC\u05D3\u05E4\u05D3\u05E3 \u05D1\u05D9\u05DF \u05D7\u05D5\u05D3\u05E9\u05D9\u05DD" })
-        ] }) : /* @__PURE__ */ jsx("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4", children: Object.entries(postsByDate).flatMap(
+        ] }) : /* @__PURE__ */ jsx("div", { className: "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3", children: Object.entries(postsByDate).flatMap(
           ([date, datePosts]) => datePosts.map((post) => /* @__PURE__ */ jsx(
             AdminPostCard,
             {
@@ -2377,7 +2377,19 @@ function PublishCard({ post, client, businessColor, onPublished, onClick, onDele
       ] }),
       post.mediaData && /* @__PURE__ */ jsx("div", { className: "flex-shrink-0", children: post.mediaType === "image" ? /* @__PURE__ */ jsx("img", { src: post.mediaData, alt: "", className: "w-16 h-16 sm:w-24 sm:h-24 object-cover rounded-lg" }) : /* @__PURE__ */ jsxs("div", { className: "w-16 h-16 sm:w-24 sm:h-24 bg-slate-900 rounded-lg flex items-center justify-center relative", children: [
         /* @__PURE__ */ jsx("video", { src: post.mediaData, className: "w-full h-full object-cover rounded-lg" }),
-        /* @__PURE__ */ jsx(Video, { className: "w-6 h-6 text-white absolute" })
+        /* @__PURE__ */ jsx("div", {
+              className: "absolute inset-0 flex items-center justify-center pointer-events-none",
+              children: /* @__PURE__ */ jsx("div", {
+                className: "w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg",
+                children: /* @__PURE__ */ jsx("svg", {
+                  className: "w-5 h-5 text-white",
+                  viewBox: "0 0 24 24",
+                  fill: "currentColor",
+                  style: { marginRight: "-2px" },
+                  children: /* @__PURE__ */ jsx("path", { d: "M8 5v14l11-7z" })
+                })
+              })
+            })
       ] }) })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2 mt-4 pt-3 border-t border-slate-100", children: [
@@ -3519,7 +3531,19 @@ function PostModal({ post, businesses, clientUsers, allPosts = [], templates = [
                         className: "absolute inset-0 bg-slate-900 flex items-center justify-center",
                         children: [
                           /* @__PURE__ */ jsx("video", { src: item.data, className: "w-full h-full object-cover" }),
-                          /* @__PURE__ */ jsx(Video, { className: "w-6 h-6 text-white absolute" })
+                          /* @__PURE__ */ jsx("div", {
+              className: "absolute inset-0 flex items-center justify-center pointer-events-none",
+              children: /* @__PURE__ */ jsx("div", {
+                className: "w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg",
+                children: /* @__PURE__ */ jsx("svg", {
+                  className: "w-5 h-5 text-white",
+                  viewBox: "0 0 24 24",
+                  fill: "currentColor",
+                  style: { marginRight: "-2px" },
+                  children: /* @__PURE__ */ jsx("path", { d: "M8 5v14l11-7z" })
+                })
+              })
+            })
                         ]
                       }),
                   // Position number
@@ -3712,7 +3736,19 @@ function AdminPostCard({ post, onEdit, onDelete, onView, onDuplicate, businessCo
             }
           ) : /* @__PURE__ */ jsxs("div", { className: "absolute inset-0 bg-slate-900 flex items-center justify-center", children: [
             /* @__PURE__ */ jsx("video", { src: displayMediaData, className: "w-full h-full object-cover" }),
-            /* @__PURE__ */ jsx(Video, { className: "w-8 h-8 text-white absolute opacity-90" })
+            /* @__PURE__ */ jsx("div", {
+              className: "absolute inset-0 flex items-center justify-center pointer-events-none",
+              children: /* @__PURE__ */ jsx("div", {
+                className: "w-14 h-14 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg",
+                children: /* @__PURE__ */ jsx("svg", {
+                  className: "w-7 h-7 text-white",
+                  viewBox: "0 0 24 24",
+                  fill: "currentColor",
+                  style: { marginRight: "-3px" },
+                  children: /* @__PURE__ */ jsx("path", { d: "M8 5v14l11-7z" })
+                })
+              })
+            })
           ] }) : /* @__PURE__ */ jsx(
             "div",
             {
@@ -3814,7 +3850,7 @@ function ClientTimelineView({ posts, onPostClick }) {
     if (dateCompare !== 0) return dateCompare;
     return (b.time || "").localeCompare(a.time || "");
   });
-  return /* @__PURE__ */ jsx("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4", children: sortedPosts.map((post) => /* @__PURE__ */ jsx(
+  return /* @__PURE__ */ jsx("div", { className: "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3", children: sortedPosts.map((post) => /* @__PURE__ */ jsx(
     ClientPostCard,
     {
       post,
@@ -3854,7 +3890,19 @@ function ClientPostCard({ post, onClick }) {
             }
           ) : /* @__PURE__ */ jsxs("div", { className: "absolute inset-0 bg-slate-900 flex items-center justify-center", children: [
             /* @__PURE__ */ jsx("video", { src: displayMediaData, className: "w-full h-full object-cover" }),
-            /* @__PURE__ */ jsx(Video, { className: "w-8 h-8 text-white absolute opacity-90" })
+            /* @__PURE__ */ jsx("div", {
+              className: "absolute inset-0 flex items-center justify-center pointer-events-none",
+              children: /* @__PURE__ */ jsx("div", {
+                className: "w-14 h-14 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg",
+                children: /* @__PURE__ */ jsx("svg", {
+                  className: "w-7 h-7 text-white",
+                  viewBox: "0 0 24 24",
+                  fill: "currentColor",
+                  style: { marginRight: "-3px" },
+                  children: /* @__PURE__ */ jsx("path", { d: "M8 5v14l11-7z" })
+                })
+              })
+            })
           ] }) : /* @__PURE__ */ jsx(
             "div",
             {
