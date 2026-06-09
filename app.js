@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.1-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} UI: Brand colors on questionnaire form", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.2-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} UI: White header + brand-colored selections", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -936,15 +936,14 @@ function PublicQuestionnaire({ questionnaire, branding, onComplete }) {
         children: [
           // Header
           /* @__PURE__ */ jsxs("div", {
-            className: "rounded-2xl shadow-lg p-6 mb-4 text-center",
-            style: { backgroundColor: "#d7ff00" },
+            className: "bg-white rounded-2xl shadow-lg p-6 mb-4 text-center",
             children: [
               branding?.logoData && /* @__PURE__ */ jsx("img", { src: branding.logoData, alt: "", className: "h-16 mx-auto mb-3" }),
               /* @__PURE__ */ jsx("h1", {
                 className: "text-2xl font-bold text-slate-900 mb-2",
                 children: questionnaire.title
               }),
-              questionnaire.intro && /* @__PURE__ */ jsx("p", { className: "text-slate-700 text-sm", children: questionnaire.intro })
+              questionnaire.intro && /* @__PURE__ */ jsx("p", { className: "text-slate-600 text-sm", children: questionnaire.intro })
             ]
           }),
           
