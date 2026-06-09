@@ -70,9 +70,42 @@ try {
         $pdo->exec("ALTER TABLE posts ADD COLUMN `mediaItems` LONGTEXT COMMENT 'JSON array of carousel media items'");
         error_log("[bidernet] Added column: posts.mediaItems");
     }
+    
+    // Auto-create questionnaires table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `questionnaires` (
+        `id` VARCHAR(100) PRIMARY KEY,
+        `title` VARCHAR(255) NOT NULL,
+        `description` TEXT,
+        `icon` VARCHAR(20),
+        `intro` TEXT,
+        `sections` LONGTEXT NOT NULL,
+        `active` TINYINT(1) DEFAULT 1,
+        `createdBy` VARCHAR(100),
+        `createdAt` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        `updatedAt` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX `idx_active` (`active`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    
+    // Auto-create questionnaire_responses table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `questionnaire_responses` (
+        `id` VARCHAR(100) PRIMARY KEY,
+        `questionnaireId` VARCHAR(100) NOT NULL,
+        `businessName` VARCHAR(255),
+        `contactName` VARCHAR(255),
+        `phone` VARCHAR(50),
+        `email` VARCHAR(255),
+        `answers` LONGTEXT,
+        `status` VARCHAR(50) DEFAULT 'new',
+        `convertedUserId` VARCHAR(100) NULL,
+        `notes` TEXT,
+        `createdAt` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        `updatedAt` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX `idx_questionnaireId` (`questionnaireId`),
+        INDEX `idx_status` (`status`),
+        INDEX `idx_createdAt` (`createdAt`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {
     // Migration failed - log it but don't break the API
-    // The error will surface on first save attempt if columns are truly missing
     error_log("[bidernet] Auto-migration warning: " . $e->getMessage());
 }
 
@@ -492,9 +525,110 @@ try {
             }
             break;
 
+        // ============== QUESTIONNAIRES (שאלונים) ==============
+        case 'questionnaires':
+            if ($method === 'GET') {
+                $rows = $pdo->query("SELECT * FROM questionnaires ORDER BY createdAt DESC")->fetchAll();
+                foreach ($rows as &$row) {
+                    if ($row['sections']) {
+                        $row['sections'] = json_decode($row['sections'], true);
+                    }
+                    if (isset($row['active'])) {
+                        $row['active'] = (bool)$row['active'];
+                    }
+                }
+                respond($rows);
+            }
+            if ($method === 'POST') {
+                $id = $input['id'] ?? uniqid('q_', true);
+                $sections = isset($input['sections']) ? json_encode($input['sections'], JSON_UNESCAPED_UNICODE) : '[]';
+                $stmt = $pdo->prepare("
+                    INSERT INTO questionnaires (id, title, description, icon, intro, sections, active, createdBy)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                      title=VALUES(title), description=VALUES(description),
+                      icon=VALUES(icon), intro=VALUES(intro),
+                      sections=VALUES(sections), active=VALUES(active)
+                ");
+                $stmt->execute([
+                    $id,
+                    $input['title'] ?? 'שאלון',
+                    $input['description'] ?? null,
+                    $input['icon'] ?? '📋',
+                    $input['intro'] ?? null,
+                    $sections,
+                    !empty($input['active']) ? 1 : 0,
+                    $input['createdBy'] ?? null
+                ]);
+                respond(['ok' => true, 'id' => $id]);
+            }
+            if ($method === 'DELETE') {
+                $id = $_GET['id'] ?? '';
+                if (!$id) error('Missing id');
+                $stmt = $pdo->prepare("DELETE FROM questionnaires WHERE id = ?");
+                $stmt->execute([$id]);
+                respond(['ok' => true]);
+            }
+            break;
+        
+        // ============== QUESTIONNAIRE RESPONSES (תשובות שלקוחות מילאו) ==============
+        case 'questionnaire_responses':
+            if ($method === 'GET') {
+                // Optional filter: ?questionnaireId=xyz
+                $qid = $_GET['questionnaireId'] ?? null;
+                if ($qid) {
+                    $stmt = $pdo->prepare("SELECT * FROM questionnaire_responses WHERE questionnaireId = ? ORDER BY createdAt DESC");
+                    $stmt->execute([$qid]);
+                } else {
+                    $stmt = $pdo->query("SELECT * FROM questionnaire_responses ORDER BY createdAt DESC");
+                }
+                $rows = $stmt->fetchAll();
+                foreach ($rows as &$row) {
+                    if ($row['answers']) {
+                        $row['answers'] = json_decode($row['answers'], true);
+                    }
+                }
+                respond($rows);
+            }
+            if ($method === 'POST') {
+                $id = $input['id'] ?? uniqid('qr_', true);
+                $answers = isset($input['answers']) ? json_encode($input['answers'], JSON_UNESCAPED_UNICODE) : '{}';
+                $stmt = $pdo->prepare("
+                    INSERT INTO questionnaire_responses 
+                      (id, questionnaireId, businessName, contactName, phone, email, answers, status, convertedUserId, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                      businessName=VALUES(businessName), contactName=VALUES(contactName),
+                      phone=VALUES(phone), email=VALUES(email),
+                      answers=VALUES(answers), status=VALUES(status),
+                      convertedUserId=VALUES(convertedUserId), notes=VALUES(notes)
+                ");
+                $stmt->execute([
+                    $id,
+                    $input['questionnaireId'] ?? '',
+                    $input['businessName'] ?? null,
+                    $input['contactName'] ?? null,
+                    $input['phone'] ?? null,
+                    $input['email'] ?? null,
+                    $answers,
+                    $input['status'] ?? 'new',
+                    $input['convertedUserId'] ?? null,
+                    $input['notes'] ?? null
+                ]);
+                respond(['ok' => true, 'id' => $id]);
+            }
+            if ($method === 'DELETE') {
+                $id = $_GET['id'] ?? '';
+                if (!$id) error('Missing id');
+                $stmt = $pdo->prepare("DELETE FROM questionnaire_responses WHERE id = ?");
+                $stmt->execute([$id]);
+                respond(['ok' => true]);
+            }
+            break;
+
         // ============== PING (test endpoint) ==============
         case 'ping':
-            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.8.3-php']);
+            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.9.0-php']);
             break;
 
         default:

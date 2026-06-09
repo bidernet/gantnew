@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.8.3-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} FIX: Auto-migrate DB columns + defensive INSERT", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} NEW: Client onboarding questionnaires", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -201,6 +201,889 @@ var POST_CATEGORIES = {
   question: { label: "\u05E9\u05D0\u05DC\u05D4", icon: "\u2753", bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-200", color: "#06B6D4" },
   other: { label: "\u05D0\u05D7\u05E8", icon: "\u{1F4CC}", bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", color: "#64748B" }
 };
+// ============== QUESTIONNAIRES VIEW (Admin: manage questionnaires + responses) ==============
+function QuestionnairesView({ currentUser, saveUsers, users }) {
+  const [activeTab, setActiveTab] = useState("builder"); // builder | responses
+  const [questionnaires, setQuestionnaires] = useState([]);
+  const [responses, setResponses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingQ, setEditingQ] = useState(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [selectedResponse, setSelectedResponse] = useState(null);
+  
+  useEffect(() => {
+    loadAll();
+  }, []);
+  
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [qRes, rRes] = await Promise.all([
+        fetch('/api.php?action=questionnaires').then(r => r.json()).catch(() => []),
+        fetch('/api.php?action=questionnaire_responses').then(r => r.json()).catch(() => [])
+      ]);
+      setQuestionnaires(Array.isArray(qRes) ? qRes : []);
+      setResponses(Array.isArray(rRes) ? rRes : []);
+    } catch (e) {
+      console.error("Failed to load:", e);
+    }
+    setLoading(false);
+  };
+  
+  const saveQuestionnaire = async (q) => {
+    try {
+      const res = await fetch('/api.php?action=questionnaires', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...q, createdBy: currentUser.username })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      await loadAll();
+      setShowEditor(false);
+      setEditingQ(null);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DE\u05D9\u05E8\u05D4: " + e.message);
+    }
+  };
+  
+  const deleteQuestionnaire = async (id) => {
+    if (!confirm("\u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05D4\u05E9\u05D0\u05DC\u05D5\u05DF? \u05D4\u05EA\u05E9\u05D5\u05D1\u05D5\u05EA \u05D9\u05D9\u05E9\u05D0\u05E8\u05D5 \u05D0\u05D1\u05DC \u05D4\u05dc\u05d9\u05e0\u05e7 \u05d9\u05e4\u05e1\u05d9\u05e7 \u05dc\u05e2\u05d1\u05d5\u05d3.")) return;
+    try {
+      await fetch(`/api.php?action=questionnaires&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await loadAll();
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4: " + e.message);
+    }
+  };
+  
+  const deleteResponse = async (id) => {
+    if (!confirm("\u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05D4\u05EA\u05E9\u05D5\u05D1\u05D4?")) return;
+    try {
+      await fetch(`/api.php?action=questionnaire_responses&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await loadAll();
+      setSelectedResponse(null);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4: " + e.message);
+    }
+  };
+  
+  const copyLink = (q) => {
+    const link = `${window.location.origin}/?q=${encodeURIComponent(q.id)}`;
+    navigator.clipboard.writeText(link).then(() => {
+      alert("\u05D4\u05DC\u05D9\u05E0\u05E7 \u05D4\u05D5\u05E2\u05EA\u05E7:\n" + link);
+    }).catch(() => {
+      prompt("\u05D4\u05E2\u05EA\u05E7 \u05D0\u05EA \u05D4\u05DC\u05D9\u05E0\u05E7:", link);
+    });
+  };
+  
+  const convertResponseToClient = async (response) => {
+    if (!response.businessName || !response.contactName) {
+      alert("\u05D7\u05E1\u05E8\u05D5 \u05E4\u05E8\u05D8\u05D9\u05DD - \u05E9\u05DD \u05E2\u05E1\u05E7 \u05D5\u05D0\u05D9\u05E9 \u05E7\u05E9\u05E8 \u05D7\u05D5\u05D1\u05D4");
+      return;
+    }
+    const username = response.email || response.phone || 'client_' + Date.now();
+    const password = Math.random().toString(36).substring(2, 8);
+    
+    if (!confirm(`\u05DC\u05D9\u05E6\u05D5\u05E8 \u05DC\u05E7\u05D5\u05D7?\n\n\u05E9\u05DD \u05DE\u05E9\u05EA\u05DE\u05E9: ${username}\n\u05E1\u05D9\u05E1\u05DE\u05D4: ${password}\n\n(\u05DB\u05D3\u05D0\u05D9 \u05DC\u05D4\u05E2\u05ea\u05D9\u05E7)`)) return;
+    
+    const newUser = {
+      id: 'user_' + Date.now(),
+      username,
+      password,
+      role: 'client',
+      name: response.contactName,
+      businessName: response.businessName,
+      email: response.email || null,
+      phone: response.phone || null,
+      createdAt: new Date().toISOString()
+    };
+    
+    try {
+      const updated = [...users, newUser];
+      await saveUsers(updated);
+      // Mark response as converted
+      await fetch('/api.php?action=questionnaire_responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...response, status: 'converted', convertedUserId: newUser.id })
+      });
+      await loadAll();
+      alert(`\u05D4\u05DC\u05E7\u05D5\u05D7 \u05E0\u05D5\u05E6\u05E8 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4! \u05E9\u05DD: ${username} | \u05E1\u05D9\u05E1\u05DE\u05D4: ${password}`);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4: " + e.message);
+    }
+  };
+  
+  // Default questionnaire template (Bidernet onboarding)
+  const createFromTemplate = () => {
+    const template = {
+      id: 'onboarding_' + Date.now(),
+      title: '\u05E9\u05D0\u05DC\u05D5\u05DF \u05D4\u05E6\u05D8\u05E8\u05E4\u05D5\u05EA \u05DC\u05E7\u05D5\u05D7',
+      description: '\u05D0\u05D9\u05E1\u05D5\u05E3 \u05DE\u05D9\u05D3\u05E2 \u05E8\u05D0\u05E9\u05D5\u05E0\u05D9 \u05DC\u05E4\u05EA\u05D9\u05D7\u05EA \u05E2\u05D1\u05D5\u05D3\u05D4',
+      icon: '\u{1F680}',
+      intro: '\u05D0\u05E0\u05D7\u05E0\u05D5 \u05E9\u05DE\u05D7\u05D9\u05DD \u05E9\u05D1\u05D7\u05E8\u05ea\u05dd \u05d1\u05e0\u05d5 \u05dc\u05dc\u05d5\u05d5\u05ea \u05d0\u05ea\u05db\u05dd \u05d1\u05e2\u05d5\u05dc\u05dd \u05d4\u05e4\u05e8\u05e1\u05d5\u05dd \u05d5\u05d4\u05e1\u05d5\u05e9\u05d9\u05d0\u05dc \u05de\u05d3\u05d9\u05d4.',
+      active: true,
+      sections: [
+        {
+          title: '\u05E4\u05E8\u05D8\u05D9 \u05D4\u05E2\u05E1\u05E7 \u05D5\u05D9\u05E6\u05D9\u05E8\u05EA \u05E7\u05E9\u05E8',
+          fields: [
+            { id: 'business', label: '\u05E9\u05DD \u05D4\u05E2\u05E1\u05E7 / \u05DC\u05E7\u05D5\u05D7', type: 'text', required: true },
+            { id: 'contact', label: '\u05D0\u05D9\u05E9 \u05E7\u05E9\u05E8', type: 'text', required: true },
+            { id: 'phone', label: '\u05D8\u05DC\u05E4\u05D5\u05DF', type: 'tel' },
+            { id: 'email', label: '\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC', type: 'email' }
+          ]
+        },
+        {
+          title: '\u05D6\u05D4\u05D5\u05EA \u05D5\u05DE\u05E1\u05E8\u05D9\u05DD',
+          fields: [
+            { id: 'unique', label: '\u05DE\u05D4 \u05DE\u05D9\u05D9\u05D7\u05D3 \u05D0\u05EA \u05D4\u05E2\u05E1\u05E7 \u05E9\u05DC\u05DB\u05DD?', hint: '\u05DE\u05D4 \u05D0\u05ea\u05DD \u05E2\u05D5\u05E9\u05D9\u05DD \u05D0\u05D7\u05E8\u05EA \u05DE\u05D0\u05D7\u05E8\u05D9\u05DD? \u05D1\u05DE\u05D4 \u05D0\u05EA\u05DD \u05D4\u05DB\u05D9 \u05D8\u05D5\u05D1\u05D9\u05DD?', type: 'textarea', required: true },
+            { id: 'messages', label: '\u05DE\u05D4\u05DD \u05D4\u05DE\u05E1\u05E8\u05D9\u05DD \u05D4\u05D7\u05E9\u05D5\u05D1\u05D9\u05DD \u05dc\u05db\u05DD \u05DC\u05E4\u05E8\u05E1\u05D5\u05DD?', hint: '\u05DC\u05D3\u05D5\u05D2\u05DE\u05D4: \u05E9\u05D9\u05E8\u05D5\u05EA \u05D0\u05D9\u05E9\u05D9, \u05D0\u05D9\u05DB\u05D5\u05EA, \u05DE\u05D7\u05D9\u05E8, \u05DE\u05E7\u05E6\u05D5\u05E2\u05D9\u05D5\u05EA', type: 'textarea' },
+            { id: 'services', label: '\u05D0\u05D9\u05DC\u05D5 \u05E9\u05D9\u05E8\u05D5\u05EA\u05D9\u05DD \u05D0\u05D5 \u05DE\u05D5\u05E6\u05E8\u05D9\u05DD \u05ea\u05E8\u05E6\u05D5 \u05DC\u05E7\u05D3\u05DD?', type: 'textarea' }
+          ]
+        },
+        {
+          title: '\u05E1\u05D2\u05E0\u05D5\u05DF \u05D5\u05ea\u05D5\u05DB\u05DF',
+          fields: [
+            { id: 'tone', label: '\u05D1\u05D0\u05D9\u05D6\u05D4 \u05DB\u05D9\u05D5\u05D5\u05DF \u05ea\u05E8\u05E6\u05D5 \u05E9\u05D4\u05ea\u05D5\u05DB\u05DF \u05D9\u05D4\u05D9\u05D4?', type: 'cards', options: [
+              { v: '\u05E6\u05E2\u05D9\u05E8 \u05D5\u05D3\u05D9\u05E0\u05DE\u05D9', i: '\u26A1' },
+              { v: '\u05D0\u05D9\u05E9\u05D9 \u05D5\u05D7\u05DD', i: '\u{1F49B}' },
+              { v: '\u05D4\u05D5\u05DE\u05D5\u05E8\u05D9\u05E1\u05D8\u05D9 \u05D5\u05DE\u05E7\u05DC\u05D9\u05DC', i: '\u{1F604}' },
+              { v: '\u05D9\u05D5\u05E7\u05E8\u05ea\u05D9 \u05D5\u05DE\u05D9\u05E0\u05D9\u05DE\u05DC\u05D9\u05E1\u05D8\u05D9', i: '\u{1F48E}' },
+              { v: '\u05DE\u05E7\u05E6\u05D5\u05E2\u05D9 \u05D5\u05E1\u05DE\u05DB\u05D5\u05ea\u05D9', i: '\u{1F3AF}' },
+              { v: '\u05DC\u05E2\u05E8\u05D1\u05D1 \u05D1\u05D9\u05DF \u05D4\u05DB\u05DC', i: '\u{1F3A8}' }
+            ] },
+            { id: 'materials', label: '\u05D4\u05D0\u05DD \u05E7\u05D9\u05D9\u05DE\u05D9\u05DD \u05D0\u05E6\u05DC\u05DB\u05DD \u05D7\u05D5\u05DE\u05E8\u05D9\u05DD \u05D2\u05E8\u05E4\u05D9\u05DD?', hint: '\u05DC\u05D5\u05D2\u05D5, \u05E6\u05D1\u05E2\u05D9 \u05DE\u05D5\u05ea\u05D2, \u05ea\u05DE\u05D5\u05E0\u05D5\u05ea, \u05E1\u05E8\u05D8\u05D5\u05E0\u05D9\u05DD', type: 'cards', options: [
+              { v: '\u05DB\u05DF, \u05D9\u05E9 \u05DC\u05E0\u05D5', i: '\u2705' },
+              { v: '\u05D0\u05D9\u05DF \u05DB\u05E8\u05D2\u05E2', i: '\u{1F6AB}' },
+              { v: '\u05D9\u05E9, \u05D0\u05D1\u05DC \u05DC\u05D0 \u05DE\u05E1\u05E4\u05D9\u05E7 \u05D8\u05D5\u05D1\u05D9\u05DD', i: '\u26A0\uFE0F' }
+            ] }
+          ]
+        },
+        {
+          title: '\u05E7\u05D4\u05DC \u05D9\u05E2\u05D3',
+          fields: [
+            { id: 'audience', label: '\u05DE\u05D4\u05D5 \u05E7\u05D4\u05DC \u05D4\u05D9\u05E2\u05D3 \u05E9\u05D0\u05DC\u05D9\u05D5 \u05ea\u05E8\u05E6\u05D5 \u05DC\u05E4\u05E8\u05E1\u05DD?', type: 'textarea' },
+            { id: 'ages', label: '\u05D0\u05D9\u05DC\u05D5 \u05D8\u05D5\u05D5\u05D7\u05D9 \u05D2\u05D9\u05DC\u05D0\u05D9\u05DD?', type: 'chips', options: ['18\u201324', '25\u201334', '35\u201344', '45\u201354', '55\u201364', '65+', '\u05DE\u05E9\u05D0\u05D9\u05E8\u05D9\u05DD \u05DC\u05E9\u05D9\u05E7\u05D5\u05DC\u05DB\u05DD'] }
+          ]
+        },
+        {
+          title: '\u05D4\u05E9\u05E8\u05D0\u05D4 \u05D5\u05D4\u05E2\u05E8\u05D5\u05ea',
+          fields: [
+            { id: 'inspiration', label: '\u05E2\u05E1\u05E7\u05D9\u05DD \u05D0\u05D5 \u05E2\u05DE\u05D5\u05D3\u05D9\u05DD \u05E9\u05D0\u05ea\u05DD \u05D0\u05D5\u05D4\u05D1\u05D9\u05DD \u05DC\u05E9\u05D0\u05D5\u05D1 \u05DE\u05D4\u05DD \u05D4\u05E9\u05E8\u05D0\u05D4?', type: 'textarea' },
+            { id: 'notes', label: '\u05DE\u05E9\u05D4\u05D5 \u05E0\u05D5\u05E1\u05E3 \u05E9\u05ea\u05E8\u05E6\u05D5 \u05DC\u05D4\u05D5\u05E1\u05D9\u05E3?', type: 'textarea' }
+          ]
+        }
+      ]
+    };
+    setEditingQ(template);
+    setShowEditor(true);
+  };
+  
+  if (loading) {
+    return /* @__PURE__ */ jsx("div", { className: "p-8 text-center text-slate-500", children: "\u05D8\u05D5\u05E2\u05DF..." });
+  }
+  
+  return /* @__PURE__ */ jsxs("div", { children: [
+    // Header with tabs
+    /* @__PURE__ */ jsxs("div", { className: "mb-6", children: [
+      /* @__PURE__ */ jsx("h1", { className: "text-2xl font-bold text-slate-900 mb-1", children: "\u05E9\u05D0\u05DC\u05D5\u05E0\u05D9\u05DD" }),
+      /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-500 mb-4", children: "\u05E0\u05D4\u05DC \u05E9\u05D0\u05DC\u05D5\u05E0\u05D9 \u05D4\u05E6\u05D8\u05E8\u05E4\u05D5\u05EA \u05DC\u05DC\u05E7\u05D5\u05D7\u05D5\u05EA \u05D5\u05D5\u05D9\u05D9\u05E2\u05D5\u05D3 \u05E2\u05D1\u05D5\u05D3\u05D4" }),
+      /* @__PURE__ */ jsxs("div", { className: "flex gap-2 border-b border-slate-200", children: [
+        /* @__PURE__ */ jsxs("button", {
+          onClick: () => setActiveTab("builder"),
+          className: `px-4 py-2 text-sm font-medium border-b-2 transition ${activeTab === "builder" ? "border-indigo-500 text-indigo-700" : "border-transparent text-slate-600 hover:text-slate-900"}`,
+          children: ["\u05E9\u05D0\u05DC\u05D5\u05E0\u05D9\u05DD (", questionnaires.length, ")"]
+        }),
+        /* @__PURE__ */ jsxs("button", {
+          onClick: () => setActiveTab("responses"),
+          className: `px-4 py-2 text-sm font-medium border-b-2 transition flex items-center gap-2 ${activeTab === "responses" ? "border-indigo-500 text-indigo-700" : "border-transparent text-slate-600 hover:text-slate-900"}`,
+          children: [
+            "\u05ea\u05E9\u05D5\u05D1\u05D5\u05ea \u05E9\u05D4\u05ea\u05E7\u05D1\u05DC\u05D5 (", responses.length, ")",
+            responses.filter(r => r.status === 'new').length > 0 && /* @__PURE__ */ jsx("span", {
+              className: "bg-rose-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full",
+              children: responses.filter(r => r.status === 'new').length
+            })
+          ]
+        })
+      ] })
+    ] }),
+    
+    // BUILDER TAB
+    activeTab === "builder" && /* @__PURE__ */ jsxs("div", { children: [
+      /* @__PURE__ */ jsxs("div", { className: "flex gap-2 mb-4", children: [
+        /* @__PURE__ */ jsxs("button", {
+          onClick: () => { setEditingQ({ id: 'q_' + Date.now(), title: '', description: '', icon: '\u{1F4CB}', intro: '', sections: [{ title: '\u05E1\u05E2\u05D9\u05E3 \u05D7\u05D3\u05E9', fields: [] }], active: true }); setShowEditor(true); },
+          className: "px-4 py-2 rounded-lg font-medium text-sm shadow-sm transition hover:opacity-90 flex items-center gap-2",
+          style: { backgroundColor: "#d7ff00", color: "#013d19" },
+          children: [/* @__PURE__ */ jsx(Plus, { className: "w-4 h-4" }), "\u05E9\u05D0\u05DC\u05D5\u05DF \u05D7\u05D3\u05E9"]
+        }),
+        questionnaires.length === 0 && /* @__PURE__ */ jsx("button", {
+          onClick: createFromTemplate,
+          className: "px-4 py-2 rounded-lg font-medium text-sm border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition",
+          children: "\u{1F680} \u05D4\u05ea\u05D7\u05DC \u05DE\u05ea\u05D1\u05E0\u05D9\u05ea: \u05D4\u05E6\u05D8\u05E8\u05E4\u05D5\u05EA \u05DC\u05E7\u05D5\u05D7"
+        })
+      ] }),
+      
+      questionnaires.length === 0 ? /* @__PURE__ */ jsxs("div", { className: "bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500", children: [
+        /* @__PURE__ */ jsx(FileText, { className: "w-12 h-12 mx-auto mb-3 text-slate-300" }),
+        /* @__PURE__ */ jsx("p", { className: "font-medium mb-1", children: "\u05D0\u05D9\u05E0 \u05E9\u05D0\u05DC\u05D5\u05E0\u05D9\u05DD \u05E2\u05D3\u05D9\u05D9\u05DF" }),
+        /* @__PURE__ */ jsx("p", { className: "text-xs", children: '\u05DC\u05D7\u05E5 "\u05E9\u05D0\u05DC\u05D5\u05DF \u05D7\u05D3\u05E9" \u05D0\u05D5 \u05D4\u05ea\u05D7\u05DC \u05DE\u05ea\u05D1\u05E0\u05D9\u05ea \u05DE\u05D5\u05DB\u05E0\u05D4' })
+      ] }) : /* @__PURE__ */ jsx("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3", children: questionnaires.map(q => {
+        const respCount = responses.filter(r => r.questionnaireId === q.id).length;
+        const newCount = responses.filter(r => r.questionnaireId === q.id && r.status === 'new').length;
+        return /* @__PURE__ */ jsxs("div", {
+          className: "bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition flex flex-col",
+          children: [
+            /* @__PURE__ */ jsxs("div", { className: "flex items-start gap-3 mb-3", children: [
+              /* @__PURE__ */ jsx("div", { className: "text-3xl", children: q.icon || '\u{1F4CB}' }),
+              /* @__PURE__ */ jsxs("div", { className: "flex-1 min-w-0", children: [
+                /* @__PURE__ */ jsx("h3", { className: "font-semibold text-slate-900 truncate", children: q.title }),
+                q.description && /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-500 line-clamp-2 mt-0.5", children: q.description })
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-3 text-xs text-slate-500 mb-3", children: [
+              /* @__PURE__ */ jsxs("span", { children: [(q.sections || []).reduce((acc, s) => acc + (s.fields || []).length, 0), " \u05E9\u05D0\u05DC\u05D5\u05EA"] }),
+              /* @__PURE__ */ jsx("span", { children: "\xB7" }),
+              /* @__PURE__ */ jsxs("span", { children: [respCount, " \u05ea\u05E9\u05D5\u05D1\u05D5\u05ea"] }),
+              newCount > 0 && /* @__PURE__ */ jsxs("span", { className: "bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold", children: [newCount, " \u05D7\u05D3\u05E9"] })
+            ] }),
+            /* @__PURE__ */ jsxs("div", { className: "flex gap-1 mt-auto", children: [
+              /* @__PURE__ */ jsxs("button", {
+                onClick: () => copyLink(q),
+                className: "flex-1 px-2 py-1.5 text-xs rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1",
+                title: "\u05D4\u05E2\u05ea\u05E7 \u05DC\u05D9\u05E0\u05E7",
+                children: [/* @__PURE__ */ jsx(Copy, { className: "w-3 h-3" }), "\u05DC\u05D9\u05E0\u05E7"]
+              }),
+              /* @__PURE__ */ jsx("button", {
+                onClick: () => { setEditingQ(q); setShowEditor(true); },
+                className: "px-2 py-1.5 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition",
+                title: "\u05E2\u05E8\u05D5\u05DA",
+                children: /* @__PURE__ */ jsx(Edit3, { className: "w-3 h-3" })
+              }),
+              /* @__PURE__ */ jsx("button", {
+                onClick: () => deleteQuestionnaire(q.id),
+                className: "px-2 py-1.5 text-xs rounded bg-rose-50 text-rose-600 hover:bg-rose-100 transition",
+                title: "\u05DE\u05D7\u05E7",
+                children: /* @__PURE__ */ jsx(Trash2, { className: "w-3 h-3" })
+              })
+            ] })
+          ]
+        }, q.id);
+      }) })
+    ] }),
+    
+    // RESPONSES TAB
+    activeTab === "responses" && /* @__PURE__ */ jsxs("div", { children: [
+      responses.length === 0 ? /* @__PURE__ */ jsxs("div", { className: "bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500", children: [
+        /* @__PURE__ */ jsx(MessageSquare, { className: "w-12 h-12 mx-auto mb-3 text-slate-300" }),
+        /* @__PURE__ */ jsx("p", { className: "font-medium mb-1", children: "\u05D0\u05D9\u05DF \u05ea\u05E9\u05D5\u05D1\u05D5\u05ea \u05E2\u05D3\u05D9\u05D9\u05DF" }),
+        /* @__PURE__ */ jsx("p", { className: "text-xs", children: "\u05E9\u05dc\u05d7 \u05dc\u05dc\u05e7\u05d5\u05d7\u05d5\u05ea \u05dc\u05d9\u05e0\u05e7 \u05dc\u05e9\u05d0\u05dc\u05d5\u05df \u05de\u05d4\u05dc\u05e9\u05d5\u05e0\u05d9\u05ea \"\u05e9\u05d0\u05dc\u05d5\u05e0\u05d9\u05dd\"" })
+      ] }) : /* @__PURE__ */ jsx("div", { className: "bg-white rounded-xl border border-slate-200 divide-y divide-slate-100", children: responses.map(r => {
+        const q = questionnaires.find(x => x.id === r.questionnaireId);
+        return /* @__PURE__ */ jsxs("div", {
+          className: "p-4 hover:bg-slate-50 cursor-pointer transition",
+          onClick: () => setSelectedResponse(r),
+          children: [
+            /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-3", children: [
+              /* @__PURE__ */ jsx("div", { 
+                className: `w-2 h-2 rounded-full flex-shrink-0 ${r.status === 'new' ? 'bg-rose-500' : r.status === 'converted' ? 'bg-emerald-500' : 'bg-slate-300'}`
+              }),
+              /* @__PURE__ */ jsxs("div", { className: "flex-1 min-w-0", children: [
+                /* @__PURE__ */ jsx("div", { className: "font-semibold text-slate-900 truncate", children: r.businessName || r.contactName || '(\u05DC\u05DC\u05D0 \u05E9\u05DD)' }),
+                /* @__PURE__ */ jsxs("div", { className: "text-xs text-slate-500 mt-0.5", children: [
+                  q?.title || '\u05E9\u05D0\u05DC\u05D5\u05DF', " \xB7 ",
+                  new Date(r.createdAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                ] })
+              ] }),
+              r.status === 'new' && /* @__PURE__ */ jsx("span", { className: "px-2 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-700", children: "\u05D7\u05D3\u05E9" }),
+              r.status === 'converted' && /* @__PURE__ */ jsx("span", { className: "px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700", children: "\u05D4\u05D5\u05DE\u05E8" }),
+              /* @__PURE__ */ jsx(ChevronLeft, { className: "w-5 h-5 text-slate-400" })
+            ] })
+          ]
+        }, r.id);
+      }) })
+    ] }),
+    
+    // Editor Modal
+    showEditor && editingQ && /* @__PURE__ */ jsx(QuestionnaireEditor, {
+      questionnaire: editingQ,
+      onSave: saveQuestionnaire,
+      onClose: () => { setShowEditor(false); setEditingQ(null); }
+    }),
+    
+    // Response Detail Modal
+    selectedResponse && /* @__PURE__ */ jsx(ResponseDetailModal, {
+      response: selectedResponse,
+      questionnaire: questionnaires.find(q => q.id === selectedResponse.questionnaireId),
+      onClose: () => setSelectedResponse(null),
+      onDelete: () => deleteResponse(selectedResponse.id),
+      onConvert: () => convertResponseToClient(selectedResponse)
+    })
+  ] });
+}
+
+// ============== QUESTIONNAIRE EDITOR ==============
+function QuestionnaireEditor({ questionnaire, onSave, onClose }) {
+  const [q, setQ] = useState(JSON.parse(JSON.stringify(questionnaire)));
+  const [saving, setSaving] = useState(false);
+  
+  const addSection = () => {
+    setQ({ ...q, sections: [...(q.sections || []), { title: '\u05E1\u05E2\u05D9\u05E3 \u05D7\u05D3\u05E9', fields: [] }] });
+  };
+  
+  const updateSection = (sIdx, updates) => {
+    const sections = [...q.sections];
+    sections[sIdx] = { ...sections[sIdx], ...updates };
+    setQ({ ...q, sections });
+  };
+  
+  const removeSection = (sIdx) => {
+    if (!confirm("\u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05D4\u05E1\u05E2\u05D9\u05E3 \u05D5\u05DB\u05DC \u05D4\u05E9\u05D0\u05DC\u05D5\u05EA \u05D1\u05D5?")) return;
+    setQ({ ...q, sections: q.sections.filter((_, i) => i !== sIdx) });
+  };
+  
+  const addField = (sIdx) => {
+    const sections = [...q.sections];
+    sections[sIdx].fields = [...(sections[sIdx].fields || []), {
+      id: 'field_' + Date.now(),
+      label: '\u05E9\u05D0\u05DC\u05D4 \u05D7\u05D3\u05E9\u05D4',
+      type: 'text',
+      required: false
+    }];
+    setQ({ ...q, sections });
+  };
+  
+  const updateField = (sIdx, fIdx, updates) => {
+    const sections = [...q.sections];
+    sections[sIdx].fields[fIdx] = { ...sections[sIdx].fields[fIdx], ...updates };
+    setQ({ ...q, sections });
+  };
+  
+  const removeField = (sIdx, fIdx) => {
+    const sections = [...q.sections];
+    sections[sIdx].fields = sections[sIdx].fields.filter((_, i) => i !== fIdx);
+    setQ({ ...q, sections });
+  };
+  
+  const handleSave = async () => {
+    if (!q.title.trim()) {
+      alert("\u05D7\u05D5\u05D1\u05D4 \u05DC\u05D4\u05D6\u05D9\u05DF \u05E9\u05DD \u05DC\u05E9\u05D0\u05DC\u05D5\u05DF");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(q);
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  return /* @__PURE__ */ jsx("div", {
+    className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4",
+    onClick: onClose,
+    children: /* @__PURE__ */ jsxs("div", {
+      className: "bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto",
+      onClick: (e) => e.stopPropagation(),
+      dir: "rtl",
+      children: [
+        /* @__PURE__ */ jsxs("div", { className: "sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10", children: [
+          /* @__PURE__ */ jsx("h2", { className: "text-lg font-semibold text-slate-900", children: q.id.startsWith('q_') && !questionnaire.title ? "\u05E9\u05D0\u05DC\u05D5\u05DF \u05D7\u05D3\u05E9" : "\u05E2\u05E8\u05D9\u05DB\u05EA \u05E9\u05D0\u05DC\u05D5\u05DF" }),
+          /* @__PURE__ */ jsx("button", { onClick: onClose, className: "text-slate-400 hover:text-slate-700", children: /* @__PURE__ */ jsx(X, { className: "w-5 h-5" }) })
+        ] }),
+        
+        /* @__PURE__ */ jsxs("div", { className: "p-6 space-y-5", children: [
+          // Basic info
+          /* @__PURE__ */ jsxs("div", { className: "grid grid-cols-12 gap-3", children: [
+            /* @__PURE__ */ jsxs("div", { className: "col-span-2", children: [
+              /* @__PURE__ */ jsx("label", { className: "block text-xs font-medium text-slate-700 mb-1", children: "\u05D0\u05D9\u05E7\u05D5\u05DF" }),
+              /* @__PURE__ */ jsx("input", {
+                type: "text",
+                value: q.icon || '',
+                onChange: (e) => setQ({ ...q, icon: e.target.value }),
+                className: "w-full px-3 py-2 rounded-lg border border-slate-200 text-2xl text-center",
+                placeholder: "\u{1F4CB}"
+              })
+            ] }),
+            /* @__PURE__ */ jsxs("div", { className: "col-span-10", children: [
+              /* @__PURE__ */ jsx("label", { className: "block text-xs font-medium text-slate-700 mb-1", children: "\u05E9\u05DD \u05D4\u05E9\u05D0\u05DC\u05D5\u05DF *" }),
+              /* @__PURE__ */ jsx("input", {
+                type: "text",
+                value: q.title,
+                onChange: (e) => setQ({ ...q, title: e.target.value }),
+                className: "w-full px-3 py-2 rounded-lg border border-slate-200",
+                placeholder: "\u05DC\u05D3\u05D5\u05D2\u05DE\u05D4: \u05E9\u05D0\u05DC\u05D5\u05DF \u05D4\u05E6\u05D8\u05E8\u05E4\u05D5\u05EA \u05DC\u05E7\u05D5\u05D7"
+              })
+            ] })
+          ] }),
+          
+          /* @__PURE__ */ jsxs("div", { children: [
+            /* @__PURE__ */ jsx("label", { className: "block text-xs font-medium text-slate-700 mb-1", children: "\u05ea\u05D9\u05D0\u05D5\u05E8 \u05E7\u05E6\u05E8 (\u05DE\u05D5\u05E6\u05D2 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4)" }),
+            /* @__PURE__ */ jsx("input", {
+              type: "text",
+              value: q.description || '',
+              onChange: (e) => setQ({ ...q, description: e.target.value }),
+              className: "w-full px-3 py-2 rounded-lg border border-slate-200"
+            })
+          ] }),
+          
+          /* @__PURE__ */ jsxs("div", { children: [
+            /* @__PURE__ */ jsx("label", { className: "block text-xs font-medium text-slate-700 mb-1", children: "\u05D4\u05E7\u05D3\u05DE\u05D4 \u05DC\u05DC\u05E7\u05D5\u05D7 (\u05DE\u05D5\u05E6\u05D2 \u05D1\u05E8\u05D0\u05E9 \u05D4\u05E9\u05D0\u05DC\u05D5\u05DF)" }),
+            /* @__PURE__ */ jsx("textarea", {
+              value: q.intro || '',
+              onChange: (e) => setQ({ ...q, intro: e.target.value }),
+              rows: 2,
+              className: "w-full px-3 py-2 rounded-lg border border-slate-200"
+            })
+          ] }),
+          
+          /* @__PURE__ */ jsxs("label", { className: "flex items-center gap-2 cursor-pointer", children: [
+            /* @__PURE__ */ jsx("input", {
+              type: "checkbox",
+              checked: q.active !== false,
+              onChange: (e) => setQ({ ...q, active: e.target.checked }),
+              className: "w-4 h-4 rounded"
+            }),
+            /* @__PURE__ */ jsx("span", { className: "text-sm text-slate-700", children: "\u05E9\u05D0\u05DC\u05D5\u05DF \u05E4\u05E2\u05D9\u05DC (\u05D6\u05DE\u05D9\u05DF \u05DC\u05DE\u05D9\u05DC\u05D5\u05D9)" })
+          ] }),
+          
+          // Sections
+          /* @__PURE__ */ jsx("div", { className: "border-t border-slate-200 pt-4", children: /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between mb-3", children: [
+            /* @__PURE__ */ jsx("h3", { className: "text-sm font-semibold text-slate-900", children: "\u05E1\u05E2\u05D9\u05E4\u05D9\u05DD \u05D5\u05E9\u05D0\u05DC\u05D5\u05EA" }),
+            /* @__PURE__ */ jsxs("button", {
+              onClick: addSection,
+              className: "px-3 py-1.5 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg flex items-center gap-1",
+              children: [/* @__PURE__ */ jsx(Plus, { className: "w-3 h-3" }), "\u05E1\u05E2\u05D9\u05E3"]
+            })
+          ] }) }),
+          
+          (q.sections || []).map((section, sIdx) => /* @__PURE__ */ jsxs("div", {
+            className: "bg-slate-50 rounded-lg p-4 border border-slate-200",
+            children: [
+              /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2 mb-3", children: [
+                /* @__PURE__ */ jsx("input", {
+                  type: "text",
+                  value: section.title,
+                  onChange: (e) => updateSection(sIdx, { title: e.target.value }),
+                  className: "flex-1 px-3 py-2 rounded-lg border border-slate-300 font-semibold",
+                  placeholder: "\u05E9\u05DD \u05E1\u05E2\u05D9\u05E3"
+                }),
+                /* @__PURE__ */ jsx("button", {
+                  onClick: () => removeSection(sIdx),
+                  className: "p-2 text-rose-500 hover:bg-rose-50 rounded",
+                  children: /* @__PURE__ */ jsx(Trash2, { className: "w-4 h-4" })
+                })
+              ] }),
+              
+              (section.fields || []).map((field, fIdx) => /* @__PURE__ */ jsxs("div", {
+                className: "bg-white rounded-lg p-3 mb-2 border border-slate-200",
+                children: [
+                  /* @__PURE__ */ jsxs("div", { className: "flex gap-2 mb-2", children: [
+                    /* @__PURE__ */ jsx("input", {
+                      type: "text",
+                      value: field.label,
+                      onChange: (e) => updateField(sIdx, fIdx, { label: e.target.value }),
+                      className: "flex-1 px-3 py-1.5 rounded border border-slate-200 text-sm",
+                      placeholder: "\u05E9\u05D0\u05DC\u05D4"
+                    }),
+                    /* @__PURE__ */ jsxs("select", {
+                      value: field.type,
+                      onChange: (e) => updateField(sIdx, fIdx, { type: e.target.value }),
+                      className: "px-3 py-1.5 rounded border border-slate-200 text-sm",
+                      children: [
+                        /* @__PURE__ */ jsx("option", { value: "text", children: "\u05D8\u05E7\u05E1\u05D8 \u05E7\u05E6\u05E8" }),
+                        /* @__PURE__ */ jsx("option", { value: "textarea", children: "\u05D8\u05E7\u05E1\u05D8 \u05D0\u05E8\u05D5\u05DA" }),
+                        /* @__PURE__ */ jsx("option", { value: "tel", children: "\u05D8\u05DC\u05E4\u05D5\u05DF" }),
+                        /* @__PURE__ */ jsx("option", { value: "email", children: "\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC" }),
+                        /* @__PURE__ */ jsx("option", { value: "cards", children: "\u05D1\u05D7\u05D9\u05E8\u05D4 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9\u05EA" }),
+                        /* @__PURE__ */ jsx("option", { value: "chips", children: "\u05D1\u05D7\u05D9\u05E8\u05D4 \u05DE\u05E8\u05D5\u05D1\u05D4" }),
+                        /* @__PURE__ */ jsx("option", { value: "select", children: "\u05E8\u05E9\u05D9\u05DE\u05D4 \u05E0\u05E4\u05ea\u05D7\u05ea" })
+                      ]
+                    }),
+                    /* @__PURE__ */ jsxs("label", { className: "flex items-center gap-1 text-xs text-slate-600 cursor-pointer", children: [
+                      /* @__PURE__ */ jsx("input", {
+                        type: "checkbox",
+                        checked: field.required || false,
+                        onChange: (e) => updateField(sIdx, fIdx, { required: e.target.checked }),
+                        className: "w-3.5 h-3.5"
+                      }),
+                      "\u05D7\u05D5\u05D1\u05D4"
+                    ] }),
+                    /* @__PURE__ */ jsx("button", {
+                      onClick: () => removeField(sIdx, fIdx),
+                      className: "p-1.5 text-rose-500 hover:bg-rose-50 rounded",
+                      children: /* @__PURE__ */ jsx(X, { className: "w-3.5 h-3.5" })
+                    })
+                  ] }),
+                  /* @__PURE__ */ jsx("input", {
+                    type: "text",
+                    value: field.hint || '',
+                    onChange: (e) => updateField(sIdx, fIdx, { hint: e.target.value }),
+                    className: "w-full px-3 py-1 rounded border border-slate-100 text-xs text-slate-500",
+                    placeholder: "\u05E8\u05DE\u05D6 \u05E2\u05D6\u05E8\u05D4 (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)"
+                  }),
+                  // Options for cards/chips/select
+                  (field.type === 'cards' || field.type === 'chips' || field.type === 'select') && /* @__PURE__ */ jsx("div", { className: "mt-2", children: /* @__PURE__ */ jsx("input", {
+                    type: "text",
+                    value: (field.options || []).map(o => typeof o === 'string' ? o : o.v).join(', '),
+                    onChange: (e) => {
+                      const opts = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+                      updateField(sIdx, fIdx, { options: opts });
+                    },
+                    className: "w-full px-3 py-1 rounded border border-slate-100 text-xs",
+                    placeholder: "\u05D0\u05E4\u05E9\u05E8\u05D5\u05D9\u05D5\u05ea, \u05DE\u05D5\u05E4\u05E8\u05D3\u05D9\u05DD \u05D1\u05E4\u05E1\u05D9\u05E7"
+                  }) })
+                ]
+              }, fIdx)),
+              
+              /* @__PURE__ */ jsxs("button", {
+                onClick: () => addField(sIdx),
+                className: "w-full mt-2 py-2 text-xs text-slate-500 hover:bg-slate-100 rounded-lg border border-dashed border-slate-300 flex items-center justify-center gap-1",
+                children: [/* @__PURE__ */ jsx(Plus, { className: "w-3 h-3" }), "\u05E9\u05D0\u05DC\u05D4 \u05D7\u05D3\u05E9\u05D4"]
+              })
+            ]
+          }, sIdx))
+        ] }),
+        
+        /* @__PURE__ */ jsxs("div", { className: "sticky bottom-0 bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-end gap-2", children: [
+          /* @__PURE__ */ jsx("button", {
+            onClick: onClose,
+            className: "px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg",
+            children: "\u05D1\u05D9\u05D8\u05D5\u05DC"
+          }),
+          /* @__PURE__ */ jsx("button", {
+            onClick: handleSave,
+            disabled: saving,
+            className: "px-5 py-2 rounded-lg text-sm font-semibold transition shadow-sm disabled:opacity-50",
+            style: { backgroundColor: "#d7ff00", color: "#013d19" },
+            children: saving ? "\u05E9\u05D5\u05DE\u05E8..." : "\u05E9\u05DE\u05D5\u05E8"
+          })
+        ] })
+      ]
+    })
+  });
+}
+
+// ============== RESPONSE DETAIL MODAL ==============
+function ResponseDetailModal({ response, questionnaire, onClose, onDelete, onConvert }) {
+  return /* @__PURE__ */ jsx("div", {
+    className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4",
+    onClick: onClose,
+    children: /* @__PURE__ */ jsxs("div", {
+      className: "bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto",
+      onClick: (e) => e.stopPropagation(),
+      dir: "rtl",
+      children: [
+        /* @__PURE__ */ jsxs("div", { className: "sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10", children: [
+          /* @__PURE__ */ jsxs("div", { children: [
+            /* @__PURE__ */ jsx("h2", { className: "text-lg font-semibold text-slate-900", children: response.businessName || response.contactName || '\u05ea\u05E9\u05D5\u05D1\u05D4' }),
+            /* @__PURE__ */ jsxs("p", { className: "text-xs text-slate-500 mt-0.5", children: [
+              questionnaire?.title || '\u05E9\u05D0\u05DC\u05D5\u05DF', " \xB7 ",
+              new Date(response.createdAt).toLocaleString('he-IL')
+            ] })
+          ] }),
+          /* @__PURE__ */ jsx("button", { onClick: onClose, className: "text-slate-400 hover:text-slate-700", children: /* @__PURE__ */ jsx(X, { className: "w-5 h-5" }) })
+        ] }),
+        
+        /* @__PURE__ */ jsxs("div", { className: "p-6 space-y-4", children: [
+          // Contact info card
+          /* @__PURE__ */ jsxs("div", { className: "bg-slate-50 rounded-lg p-4", children: [
+            /* @__PURE__ */ jsx("h3", { className: "text-xs font-bold text-slate-500 mb-2 uppercase", children: "\u05E4\u05E8\u05D8\u05D9 \u05E7\u05E9\u05E8" }),
+            /* @__PURE__ */ jsxs("div", { className: "space-y-1 text-sm", children: [
+              response.businessName && /* @__PURE__ */ jsxs("div", { children: [/* @__PURE__ */ jsx("strong", { children: "\u05E2\u05E1\u05E7: " }), response.businessName] }),
+              response.contactName && /* @__PURE__ */ jsxs("div", { children: [/* @__PURE__ */ jsx("strong", { children: "\u05D0\u05D9\u05E9 \u05E7\u05E9\u05E8: " }), response.contactName] }),
+              response.phone && /* @__PURE__ */ jsxs("div", { children: [/* @__PURE__ */ jsx("strong", { children: "\u05D8\u05DC\u05E4\u05D5\u05DF: " }), response.phone] }),
+              response.email && /* @__PURE__ */ jsxs("div", { children: [/* @__PURE__ */ jsx("strong", { children: "\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC: " }), response.email] })
+            ] })
+          ] }),
+          
+          // Answers
+          questionnaire && questionnaire.sections && /* @__PURE__ */ jsx("div", { className: "space-y-4", children: questionnaire.sections.map((section, sIdx) => /* @__PURE__ */ jsxs("div", { children: [
+            /* @__PURE__ */ jsx("h3", { className: "text-sm font-bold text-slate-700 mb-2", children: section.title }),
+            /* @__PURE__ */ jsx("div", { className: "space-y-2", children: (section.fields || []).map(field => {
+              const val = response.answers?.[field.id];
+              if (val === undefined || val === null || val === '') return null;
+              const displayVal = Array.isArray(val) ? val.join(', ') : val;
+              return /* @__PURE__ */ jsxs("div", { className: "bg-white border border-slate-200 rounded-lg p-3", children: [
+                /* @__PURE__ */ jsx("div", { className: "text-xs font-semibold text-slate-500 mb-1", children: field.label }),
+                /* @__PURE__ */ jsx("div", { className: "text-sm text-slate-800 whitespace-pre-wrap", children: displayVal })
+              ] }, field.id);
+            }) })
+          ] }, sIdx)) })
+        ] }),
+        
+        /* @__PURE__ */ jsxs("div", { className: "sticky bottom-0 bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-between gap-2", children: [
+          /* @__PURE__ */ jsx("button", {
+            onClick: onDelete,
+            className: "px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 rounded-lg flex items-center gap-1",
+            children: [/* @__PURE__ */ jsx(Trash2, { className: "w-4 h-4 ml-1" }), "\u05DE\u05D7\u05E7"]
+          }),
+          /* @__PURE__ */ jsxs("div", { className: "flex gap-2", children: [
+            /* @__PURE__ */ jsx("button", {
+              onClick: onClose,
+              className: "px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg",
+              children: "\u05E1\u05D2\u05D5\u05E8"
+            }),
+            response.status !== 'converted' && /* @__PURE__ */ jsxs("button", {
+              onClick: onConvert,
+              className: "px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-1",
+              style: { backgroundColor: "#d7ff00", color: "#013d19" },
+              children: [/* @__PURE__ */ jsx(Plus, { className: "w-4 h-4" }), "\u05D9\u05E6\u05D5\u05E8 \u05DC\u05E7\u05D5\u05D7"]
+            })
+          ] })
+        ] })
+      ]
+    })
+  });
+}
+
+// ============== PUBLIC QUESTIONNAIRE (what clients fill out) ==============
+function PublicQuestionnaire({ questionnaire, branding, onComplete }) {
+  const [answers, setAnswers] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [errors, setErrors] = useState({});
+  
+  const updateAnswer = (fieldId, value) => {
+    setAnswers({ ...answers, [fieldId]: value });
+    if (errors[fieldId]) {
+      const newErrors = { ...errors };
+      delete newErrors[fieldId];
+      setErrors(newErrors);
+    }
+  };
+  
+  // Calculate progress
+  const allFields = [];
+  (questionnaire.sections || []).forEach(s => (s.fields || []).forEach(f => allFields.push(f)));
+  const filledCount = allFields.filter(f => {
+    const v = answers[f.id];
+    if (Array.isArray(v)) return v.length > 0;
+    return v !== undefined && v !== null && v !== "";
+  }).length;
+  const progress = allFields.length > 0 ? Math.round((filledCount / allFields.length) * 100) : 0;
+  
+  const handleSubmit = async () => {
+    // Validate required fields
+    const newErrors = {};
+    allFields.forEach(f => {
+      if (f.required) {
+        const v = answers[f.id];
+        if (v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0)) {
+          newErrors[f.id] = true;
+        }
+      }
+    });
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      alert("\u05D9\u05E9 \u05DC\u05DE\u05DC\u05D0 \u05D0\u05EA \u05DB\u05DC \u05D4\u05E9\u05D3\u05D5\u05EA \u05D4\u05DE\u05E1\u05D5\u05DE\u05E0\u05D9\u05DD \u05D1\u05DB\u05D5\u05DB\u05D1\u05D9\u05ea \u05D0\u05D3\u05D5\u05DE\u05D4");
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      // Extract common fields from answers
+      const businessName = answers.business || answers.businessName || "";
+      const contactName = answers.contact || answers.contactName || "";
+      const phone = answers.phone || "";
+      const email = answers.email || "";
+      
+      const res = await fetch('/api.php?action=questionnaire_responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionnaireId: questionnaire.id,
+          businessName,
+          contactName,
+          phone,
+          email,
+          answers,
+          status: 'new'
+        })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      setSubmitted(true);
+    } catch (e) {
+      alert("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DC\u05D9\u05D7\u05D4: " + e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  if (submitted) {
+    return /* @__PURE__ */ jsx("div", {
+      className: "min-h-screen flex items-center justify-center p-4",
+      style: { background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)" },
+      dir: "rtl",
+      children: /* @__PURE__ */ jsxs("div", {
+        className: "max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center",
+        children: [
+          /* @__PURE__ */ jsx("div", { className: "text-6xl mb-4", children: "\u{1F389}" }),
+          /* @__PURE__ */ jsx("h1", { className: "text-2xl font-bold text-slate-900 mb-2", children: "\u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4!" }),
+          /* @__PURE__ */ jsx("p", { className: "text-slate-600 mb-6", children: "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5 \u05D0\u05EA \u05D4\u05ea\u05E9\u05D5\u05D1\u05D5\u05ea \u05E9\u05DC\u05DA. \u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05D1\u05D4\u05E7\u05D3\u05DD." }),
+          branding?.logoData && /* @__PURE__ */ jsx("img", { src: branding.logoData, alt: "", className: "h-16 mx-auto mt-4 opacity-70" })
+        ]
+      })
+    });
+  }
+  
+  return /* @__PURE__ */ jsxs("div", {
+    className: "min-h-screen py-8 px-4",
+    style: { background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)" },
+    dir: "rtl",
+    children: [
+      /* @__PURE__ */ jsxs("div", {
+        className: "max-w-2xl mx-auto",
+        children: [
+          // Header
+          /* @__PURE__ */ jsxs("div", {
+            className: "bg-white rounded-2xl shadow-lg p-6 mb-4 text-center",
+            children: [
+              branding?.logoData && /* @__PURE__ */ jsx("img", { src: branding.logoData, alt: "", className: "h-16 mx-auto mb-3" }),
+              /* @__PURE__ */ jsxs("h1", {
+                className: "text-2xl font-bold text-slate-900 mb-2",
+                children: [questionnaire.icon || "\u{1F4CB}", " ", questionnaire.title]
+              }),
+              questionnaire.intro && /* @__PURE__ */ jsx("p", { className: "text-slate-600 text-sm", children: questionnaire.intro })
+            ]
+          }),
+          
+          // Progress
+          /* @__PURE__ */ jsxs("div", {
+            className: "bg-white rounded-xl shadow p-4 mb-4 sticky top-2 z-10",
+            children: [
+              /* @__PURE__ */ jsxs("div", { className: "flex justify-between text-xs text-slate-600 mb-1.5", children: [
+                /* @__PURE__ */ jsxs("span", { children: ["\u05D4\u05EA\u05E7\u05D3\u05DE\u05D5\u05EA: ", progress, "%"] }),
+                /* @__PURE__ */ jsxs("span", { children: [filledCount, " / ", allFields.length, " \u05E0\u05E2\u05E0\u05D5"] })
+              ] }),
+              /* @__PURE__ */ jsx("div", { 
+                className: "h-2 bg-slate-200 rounded-full overflow-hidden",
+                children: /* @__PURE__ */ jsx("div", {
+                  className: "h-full rounded-full transition-all",
+                  style: { width: `${progress}%`, background: "linear-gradient(90deg, #d7ff00, #013d19)" }
+                })
+              })
+            ]
+          }),
+          
+          // Sections
+          (questionnaire.sections || []).map((section, sIdx) => /* @__PURE__ */ jsxs("div", {
+            className: "bg-white rounded-2xl shadow p-6 mb-4",
+            children: [
+              /* @__PURE__ */ jsxs("h2", {
+                className: "text-lg font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100",
+                children: [sIdx + 1, ". ", section.title]
+              }),
+              /* @__PURE__ */ jsx("div", { className: "space-y-5", children: (section.fields || []).map(field => 
+                /* @__PURE__ */ jsx(QuestionnaireField, {
+                  field,
+                  value: answers[field.id],
+                  onChange: (v) => updateAnswer(field.id, v),
+                  hasError: !!errors[field.id]
+                }, field.id)
+              ) })
+            ]
+          }, sIdx)),
+          
+          // Submit
+          /* @__PURE__ */ jsxs("div", {
+            className: "bg-white rounded-2xl shadow p-6 text-center",
+            children: [
+              /* @__PURE__ */ jsx("button", {
+                onClick: handleSubmit,
+                disabled: submitting,
+                className: "w-full py-4 rounded-xl font-bold text-lg transition shadow-md disabled:opacity-50",
+                style: { backgroundColor: "#d7ff00", color: "#013d19" },
+                children: submitting ? "\u05E9\u05D5\u05DC\u05D7..." : "\u05E9\u05DC\u05D7 \u05D0\u05EA \u05D4\u05ea\u05E9\u05D5\u05D1\u05D5\u05EA"
+              }),
+              /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-400 mt-3", children: "\u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05E9\u05DC\u05DA \u05D9\u05E9\u05DE\u05E8\u05D5 \u05D1\u05D1\u05D8\u05D7\u05D4" })
+            ]
+          })
+        ]
+      })
+    ]
+  });
+}
+
+// Individual field renderer
+function QuestionnaireField({ field, value, onChange, hasError }) {
+  const errorClass = hasError ? "border-rose-300 ring-2 ring-rose-100" : "border-slate-200";
+  
+  return /* @__PURE__ */ jsxs("div", { children: [
+    /* @__PURE__ */ jsxs("label", { className: "block text-sm font-semibold text-slate-800 mb-1", children: [
+      field.label,
+      field.required && /* @__PURE__ */ jsx("span", { className: "text-rose-500 mr-1", children: "*" })
+    ] }),
+    field.hint && /* @__PURE__ */ jsx("p", { className: "text-xs text-slate-500 mb-2", children: field.hint }),
+    
+    // Text input
+    (field.type === "text" || field.type === "tel" || field.type === "email") && /* @__PURE__ */ jsx("input", {
+      type: field.type,
+      value: value || "",
+      onChange: (e) => onChange(e.target.value),
+      className: `w-full px-4 py-2.5 rounded-lg border ${errorClass} focus:outline-none focus:ring-2 focus:ring-indigo-300`,
+      placeholder: field.placeholder || ""
+    }),
+    
+    // Textarea
+    field.type === "textarea" && /* @__PURE__ */ jsx("textarea", {
+      value: value || "",
+      onChange: (e) => onChange(e.target.value),
+      rows: 3,
+      className: `w-full px-4 py-2.5 rounded-lg border ${errorClass} focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y`,
+      placeholder: field.placeholder || ""
+    }),
+    
+    // Cards (visual single-select)
+    field.type === "cards" && /* @__PURE__ */ jsx("div", {
+      className: "grid grid-cols-2 sm:grid-cols-3 gap-2",
+      children: (field.options || []).map((opt, i) => {
+        const v = typeof opt === "string" ? opt : opt.v;
+        const icon = typeof opt === "object" ? opt.i : null;
+        const selected = value === v;
+        return /* @__PURE__ */ jsxs("button", {
+          type: "button",
+          onClick: () => onChange(v),
+          className: `p-3 rounded-lg border-2 text-center text-sm transition ${selected ? "border-indigo-500 bg-indigo-50 font-semibold" : "border-slate-200 hover:border-slate-300 bg-white"}`,
+          children: [
+            icon && /* @__PURE__ */ jsx("div", { className: "text-2xl mb-1", children: icon }),
+            /* @__PURE__ */ jsx("div", { children: v })
+          ]
+        }, i);
+      })
+    }),
+    
+    // Chips (multi-select)
+    field.type === "chips" && /* @__PURE__ */ jsx("div", {
+      className: "flex flex-wrap gap-2",
+      children: (field.options || []).map((opt, i) => {
+        const v = typeof opt === "string" ? opt : opt.v;
+        const arr = Array.isArray(value) ? value : [];
+        const selected = arr.includes(v);
+        return /* @__PURE__ */ jsx("button", {
+          type: "button",
+          onClick: () => {
+            const newArr = selected ? arr.filter(x => x !== v) : [...arr, v];
+            onChange(newArr);
+          },
+          className: `px-4 py-2 rounded-full border-2 text-sm transition ${selected ? "border-indigo-500 bg-indigo-50 font-semibold" : "border-slate-200 hover:border-slate-300 bg-white"}`,
+          children: v
+        }, i);
+      })
+    }),
+    
+    // Select
+    field.type === "select" && /* @__PURE__ */ jsxs("select", {
+      value: value || "",
+      onChange: (e) => onChange(e.target.value),
+      className: `w-full px-4 py-2.5 rounded-lg border ${errorClass} focus:outline-none focus:ring-2 focus:ring-indigo-300`,
+      children: [
+        /* @__PURE__ */ jsx("option", { value: "", children: "\u05D1\u05D7\u05E8..." }),
+        (field.options || []).map((opt, i) => /* @__PURE__ */ jsx("option", { value: typeof opt === "string" ? opt : opt.v, children: typeof opt === "string" ? opt : opt.v }, i))
+      ]
+    })
+  ] });
+}
+
 function ContentCalendarApp() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -218,8 +1101,28 @@ function ContentCalendarApp() {
     }
   }, [branding]);
   const [isShareMode, setIsShareMode] = useState(false);
+  const [questionnaireMode, setQuestionnaireMode] = useState(null); // { id, questionnaire }
   const loadSession = async () => {
     try {
+      // Check for questionnaire URL parameter (?q=questionnaire_id)
+      const urlParams = new URLSearchParams(window.location.search);
+      const qId = urlParams.get('q');
+      if (qId) {
+        try {
+          const res = await fetch(`/api.php?action=questionnaires`);
+          if (res.ok) {
+            const all = await res.json();
+            const found = (Array.isArray(all) ? all : []).find(q => q.id === qId);
+            if (found && found.active) {
+              setQuestionnaireMode({ id: qId, questionnaire: found });
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to load questionnaire:", e);
+        }
+      }
       try {
         const brandingResult = await window.storage.get("branding");
         if (brandingResult && brandingResult.value) {
@@ -380,6 +1283,19 @@ function ContentCalendarApp() {
     return /* @__PURE__ */ jsxs(Fragment, { children: [
       /* @__PURE__ */ jsx(FontStyles, {}),
       /* @__PURE__ */ jsx("div", { className: "min-h-screen bg-slate-50 flex items-center justify-center", dir: "rtl", children: /* @__PURE__ */ jsx("div", { className: "text-slate-600", children: "\u05D8\u05D5\u05E2\u05DF..." }) })
+    ] });
+  }
+  if (questionnaireMode) {
+    return /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx(FontStyles, {}),
+      /* @__PURE__ */ jsx(PublicQuestionnaire, { 
+        questionnaire: questionnaireMode.questionnaire,
+        branding,
+        onComplete: () => {
+          // Clear URL and reset
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      })
     ] });
   }
   if (!currentUser) {
@@ -936,6 +1852,21 @@ ${errors.slice(0, 3).join("\n")}`);
                     /* @__PURE__ */ jsx("span", { children: "\u05DE\u05E0\u05D4\u05DC\u05D9\u05DD" })
                   ]
                 }
+              ),
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => {
+                    setActiveView("questionnaires");
+                    setSidebarOpen(false);
+                  },
+                  className: `w-full px-3 py-2.5 text-sm rounded-lg transition flex items-center gap-3 ${activeView === "questionnaires" ? "font-semibold" : "text-slate-700 hover:bg-slate-100"}`,
+                  style: activeView === "questionnaires" ? { backgroundColor: branding.primaryColor, color: branding.secondaryColor } : {},
+                  children: [
+                    /* @__PURE__ */ jsx(FileText, { className: "w-5 h-5" }),
+                    /* @__PURE__ */ jsx("span", { children: "\u05E9\u05D0\u05DC\u05D5\u05E0\u05D9\u05DD" })
+                  ]
+                }
               )
             ] }),
             /* @__PURE__ */ jsx("div", { className: "px-3 mb-1 mt-6", children: /* @__PURE__ */ jsx("div", { className: "px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider", children: "\u05DB\u05DC\u05D9\u05DD" }) }),
@@ -1240,6 +2171,14 @@ ${errors.slice(0, 3).join("\n")}`);
             clientUsers,
             getBusinessColor,
             currentUser: user
+          }
+        ),
+        activeView === "questionnaires" && /* @__PURE__ */ jsx(
+          QuestionnairesView,
+          {
+            currentUser: user,
+            saveUsers,
+            users
           }
         )
       ] })

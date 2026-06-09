@@ -109,6 +109,40 @@ CREATE TABLE IF NOT EXISTS `gantt_approvals` (
   `updatedAt` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ========== QUESTIONNAIRES (שאלונים שהאדמין יוצר) ==========
+CREATE TABLE IF NOT EXISTS `questionnaires` (
+  `id` VARCHAR(100) PRIMARY KEY,
+  `title` VARCHAR(255) NOT NULL,
+  `description` TEXT,
+  `icon` VARCHAR(20),
+  `intro` TEXT,
+  `sections` LONGTEXT NOT NULL COMMENT 'JSON of sections with fields',
+  `active` TINYINT(1) DEFAULT 1,
+  `createdBy` VARCHAR(100),
+  `createdAt` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_active` (`active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========== QUESTIONNAIRE RESPONSES (תשובות שלקוחות מילאו) ==========
+CREATE TABLE IF NOT EXISTS `questionnaire_responses` (
+  `id` VARCHAR(100) PRIMARY KEY,
+  `questionnaireId` VARCHAR(100) NOT NULL,
+  `businessName` VARCHAR(255),
+  `contactName` VARCHAR(255),
+  `phone` VARCHAR(50),
+  `email` VARCHAR(255),
+  `answers` LONGTEXT COMMENT 'JSON of all answers',
+  `status` VARCHAR(50) DEFAULT 'new' COMMENT 'new/reviewed/converted',
+  `convertedUserId` VARCHAR(100) NULL,
+  `notes` TEXT,
+  `createdAt` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_questionnaireId` (`questionnaireId`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_createdAt` (`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ========== DEFAULT ADMIN USER ==========
 -- Username: admin / Password: admin123
 INSERT INTO `users` (`id`, `username`, `password`, `name`, `role`)
