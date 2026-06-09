@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.0-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} NEW: Client onboarding questionnaires", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.1-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} UI: Brand colors on questionnaire form", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -936,14 +936,15 @@ function PublicQuestionnaire({ questionnaire, branding, onComplete }) {
         children: [
           // Header
           /* @__PURE__ */ jsxs("div", {
-            className: "bg-white rounded-2xl shadow-lg p-6 mb-4 text-center",
+            className: "rounded-2xl shadow-lg p-6 mb-4 text-center",
+            style: { backgroundColor: "#d7ff00" },
             children: [
               branding?.logoData && /* @__PURE__ */ jsx("img", { src: branding.logoData, alt: "", className: "h-16 mx-auto mb-3" }),
-              /* @__PURE__ */ jsxs("h1", {
+              /* @__PURE__ */ jsx("h1", {
                 className: "text-2xl font-bold text-slate-900 mb-2",
-                children: [questionnaire.icon || "\u{1F4CB}", " ", questionnaire.title]
+                children: questionnaire.title
               }),
-              questionnaire.intro && /* @__PURE__ */ jsx("p", { className: "text-slate-600 text-sm", children: questionnaire.intro })
+              questionnaire.intro && /* @__PURE__ */ jsx("p", { className: "text-slate-700 text-sm", children: questionnaire.intro })
             ]
           }),
           
@@ -1043,7 +1044,8 @@ function QuestionnaireField({ field, value, onChange, hasError }) {
         return /* @__PURE__ */ jsxs("button", {
           type: "button",
           onClick: () => onChange(v),
-          className: `p-3 rounded-lg border-2 text-center text-sm transition ${selected ? "border-indigo-500 bg-indigo-50 font-semibold" : "border-slate-200 hover:border-slate-300 bg-white"}`,
+          className: `p-3 rounded-lg border-2 text-center text-sm transition ${selected ? "font-semibold" : "border-slate-200 hover:border-slate-300 bg-white"}`,
+          style: selected ? { borderColor: "#013d19", backgroundColor: "#d7ff00", color: "#013d19" } : {},
           children: [
             icon && /* @__PURE__ */ jsx("div", { className: "text-2xl mb-1", children: icon }),
             /* @__PURE__ */ jsx("div", { children: v })
@@ -1065,7 +1067,8 @@ function QuestionnaireField({ field, value, onChange, hasError }) {
             const newArr = selected ? arr.filter(x => x !== v) : [...arr, v];
             onChange(newArr);
           },
-          className: `px-4 py-2 rounded-full border-2 text-sm transition ${selected ? "border-indigo-500 bg-indigo-50 font-semibold" : "border-slate-200 hover:border-slate-300 bg-white"}`,
+          className: `px-4 py-2 rounded-full border-2 text-sm transition ${selected ? "font-semibold" : "border-slate-200 hover:border-slate-300 bg-white"}`,
+          style: selected ? { borderColor: "#013d19", backgroundColor: "#d7ff00", color: "#013d19" } : {},
           children: v
         }, i);
       })

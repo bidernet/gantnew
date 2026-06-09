@@ -628,7 +628,7 @@ try {
 
         // ============== PING (test endpoint) ==============
         case 'ping':
-            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.9.0-php']);
+            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.9.1-php']);
             break;
 
         default:
