@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.4-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} NEW: Download button in media gallery", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.5-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} FIX: Empty media box in post modal", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -4728,12 +4728,13 @@ function useLazyMedia(post) {
   useEffect(() => {
     // If we already have media, no need to lazy load
     if (media) return;
-    // If post doesn't indicate any media, also no need
-    if (!post.hasMedia && !post.hasCarousel) return;
     
     // Check cache first
     if (_mediaCache.has(post.id)) {
-      setMedia(_mediaCache.get(post.id));
+      const cached = _mediaCache.get(post.id);
+      if (cached && (cached.mediaData || (cached.mediaItems && cached.mediaItems.length > 0))) {
+        setMedia(cached);
+      }
       return;
     }
     
@@ -4745,12 +4746,15 @@ function useLazyMedia(post) {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           fetchPostMedia(post.id).then(data => {
-            if (data) setMedia(data);
+            // Only set if there's actual media content
+            if (data && (data.mediaData || (data.mediaItems && data.mediaItems.length > 0))) {
+              setMedia(data);
+            }
           });
           observer.disconnect();
         }
       });
-    }, { rootMargin: '200px' }); // start loading 200px before visible
+    }, { rootMargin: '200px' });
     
     observer.observe(el);
     return () => observer.disconnect();
@@ -5109,6 +5113,7 @@ function ClientPostCard({ post, onClick }) {
 function PostMediaGallery({ post }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loadedMedia, setLoadedMedia] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   
   // Lazy load full media when modal opens (if not already loaded)
   useEffect(() => {
@@ -5116,18 +5121,30 @@ function PostMediaGallery({ post }) {
     if (post.mediaData || (post.mediaItems && post.mediaItems.length > 0)) {
       return;
     }
-    // If post indicates it has media, fetch it
-    if (post.hasMedia || post.hasCarousel) {
-      // Check cache first
-      if (_mediaCache.has(post.id)) {
-        setLoadedMedia(_mediaCache.get(post.id));
+    // Always try to fetch - the post might have media even without explicit flags
+    // (this handles legacy posts and ensures we always try)
+    
+    // Check cache first
+    if (_mediaCache.has(post.id)) {
+      const cached = _mediaCache.get(post.id);
+      if (cached && (cached.mediaData || (cached.mediaItems && cached.mediaItems.length > 0))) {
+        setLoadedMedia(cached);
       } else {
-        fetchPostMedia(post.id).then(data => {
-          if (data) setLoadedMedia(data);
-        });
+        setLoadFailed(true);
       }
+      return;
     }
-  }, [post.id, post.hasMedia, post.hasCarousel, post.mediaData, post.mediaItems]);
+    
+    // Fetch from server
+    fetchPostMedia(post.id).then(data => {
+      if (data && (data.mediaData || (data.mediaItems && data.mediaItems.length > 0))) {
+        setLoadedMedia(data);
+      } else {
+        // No media on server - mark as failed so we don't show spinner forever
+        setLoadFailed(true);
+      }
+    }).catch(() => setLoadFailed(true));
+  }, [post.id, post.mediaData, post.mediaItems]);
   
   // Use loaded media if available, else fall back to post
   const effective = loadedMedia || post;
@@ -5136,18 +5153,20 @@ function PostMediaGallery({ post }) {
   const isCarousel = effective.isCarousel && effective.mediaItems && effective.mediaItems.length > 0;
   const items = isCarousel ? effective.mediaItems : (effective.mediaData ? [{ type: effective.mediaType, data: effective.mediaData, name: effective.mediaName }] : []);
   
-  // Show loading spinner if waiting for media
-  if (items.length === 0) {
-    if (post.hasMedia || post.hasCarousel) {
-      return /* @__PURE__ */ jsx("div", {
-        className: "rounded-xl bg-slate-100 flex items-center justify-center",
-        style: { minHeight: 200 },
-        children: /* @__PURE__ */ jsx("div", {
-          className: "w-10 h-10 border-4 border-slate-300 border-t-slate-600 rounded-full animate-spin"
-        })
-      });
-    }
+  // If no items and load failed - hide gallery entirely (don't show empty box)
+  if (items.length === 0 && loadFailed) {
     return null;
+  }
+  
+  // Show loading spinner while waiting for media
+  if (items.length === 0) {
+    return /* @__PURE__ */ jsx("div", {
+      className: "rounded-xl bg-slate-100 flex items-center justify-center",
+      style: { minHeight: 200 },
+      children: /* @__PURE__ */ jsx("div", {
+        className: "w-10 h-10 border-4 border-slate-300 border-t-slate-600 rounded-full animate-spin"
+      })
+    });
   }
   
   const total = items.length;
