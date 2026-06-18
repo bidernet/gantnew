@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.2-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} UI: White header + brand-colored selections", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.4-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} NEW: Download button in media gallery", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -1594,6 +1594,20 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
       return JSON.stringify(newPost) !== JSON.stringify(current);
     });
     console.log(`\u{1F4BE} savePosts: ${toUpsert.length} to save, ${toDelete.length} to delete`);
+    
+    // SAFETY: Before saving, ensure media data is loaded if the post has it
+    // This prevents accidentally overwriting media with empty data
+    for (let i = 0; i < toUpsert.length; i++) {
+      const p = toUpsert[i];
+      // If post indicates it has media but doesn't have mediaData/mediaItems in memory, fetch it
+      if ((p.hasMedia || p.hasCarousel) && !p.mediaData && !(p.mediaItems && p.mediaItems.length > 0)) {
+        const fullMedia = await fetchPostMedia(p.id);
+        if (fullMedia) {
+          toUpsert[i] = { ...p, ...fullMedia };
+        }
+      }
+    }
+    
     const errors = [];
     for (const post of toUpsert) {
       try {
@@ -1609,6 +1623,16 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
           console.error(errMsg);
         } else {
           console.log(`\u2713 Saved post ${post.id}`);
+          // Update cache with fresh data
+          if (post.mediaData || (post.mediaItems && post.mediaItems.length > 0)) {
+            _mediaCache.set(post.id, {
+              mediaData: post.mediaData,
+              mediaType: post.mediaType,
+              mediaName: post.mediaName,
+              mediaItems: post.mediaItems,
+              isCarousel: post.isCarousel
+            });
+          }
         }
       } catch (e) {
         const errMsg = `Post ${post.id}: ${e.message}`;
@@ -2915,7 +2939,14 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
             AdminPostCard,
             {
               post,
-              onEdit: (p) => {
+              onEdit: async (p) => {
+                // Ensure full media is loaded before opening edit modal
+                if (!p.mediaData && !(p.mediaItems && p.mediaItems.length > 0) && (p.hasMedia || p.hasCarousel)) {
+                  const fullMedia = await fetchPostMedia(p.id);
+                  if (fullMedia) {
+                    p = { ...p, ...fullMedia };
+                  }
+                }
                 setEditingPost(p);
                 setShowPostModal(true);
               },
@@ -3005,8 +3036,14 @@ function PostsView({ posts, savePosts, businesses, selectedBusiness, setSelected
       {
         post: selectedPost,
         onClose: () => setSelectedPost(null),
-        onEdit: () => {
-          setEditingPost(selectedPost);
+        onEdit: async () => {
+          let p = selectedPost;
+          // Ensure full media is loaded
+          if (!p.mediaData && !(p.mediaItems && p.mediaItems.length > 0) && (p.hasMedia || p.hasCarousel)) {
+            const fullMedia = await fetchPostMedia(p.id);
+            if (fullMedia) p = { ...p, ...fullMedia };
+          }
+          setEditingPost(p);
           setSelectedPost(null);
           setShowPostModal(true);
         },
@@ -4641,6 +4678,87 @@ function ApprovalBadge({ approval }) {
   }
   return null;
 }
+// ============== LAZY MEDIA LOADING ==============
+// Cache for loaded media (so we don't re-fetch)
+const _mediaCache = new Map();
+const _pendingMedia = new Map();
+
+async function fetchPostMedia(postId) {
+  // Return from cache if already loaded
+  if (_mediaCache.has(postId)) return _mediaCache.get(postId);
+  // Return existing promise if already fetching
+  if (_pendingMedia.has(postId)) return _pendingMedia.get(postId);
+  
+  const promise = (async () => {
+    try {
+      const res = await fetch(`/api.php?action=post_media&id=${encodeURIComponent(postId)}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      _mediaCache.set(postId, data);
+      return data;
+    } catch (e) {
+      console.warn("Failed to lazy load media for", postId, e);
+      return null;
+    } finally {
+      _pendingMedia.delete(postId);
+    }
+  })();
+  _pendingMedia.set(postId, promise);
+  return promise;
+}
+
+// React hook for lazy loading media when visible
+function useLazyMedia(post) {
+  const [media, setMedia] = useState(() => {
+    // If post already has mediaData (eager), use it
+    if (post.mediaData || (post.mediaItems && post.mediaItems.length > 0)) {
+      return {
+        mediaData: post.mediaData,
+        mediaType: post.mediaType,
+        mediaName: post.mediaName,
+        mediaItems: post.mediaItems,
+        isCarousel: post.isCarousel
+      };
+    }
+    // If post has hasMedia flag (optimized), need to fetch
+    return null;
+  });
+  const ref = useRef(null);
+  
+  useEffect(() => {
+    // If we already have media, no need to lazy load
+    if (media) return;
+    // If post doesn't indicate any media, also no need
+    if (!post.hasMedia && !post.hasCarousel) return;
+    
+    // Check cache first
+    if (_mediaCache.has(post.id)) {
+      setMedia(_mediaCache.get(post.id));
+      return;
+    }
+    
+    // Set up IntersectionObserver to load when visible
+    const el = ref.current;
+    if (!el) return;
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          fetchPostMedia(post.id).then(data => {
+            if (data) setMedia(data);
+          });
+          observer.disconnect();
+        }
+      });
+    }, { rootMargin: '200px' }); // start loading 200px before visible
+    
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [post.id, post.hasMedia, post.hasCarousel, media]);
+  
+  return { media, ref };
+}
+
 function AdminPostCard({ post, onEdit, onDelete, onView, onDuplicate, businessColor }) {
   const statusColors = {
     scheduled: { bg: "bg-blue-50", text: "text-blue-700", label: "\u05DE\u05EA\u05D5\u05D6\u05DE\u05DF" },
@@ -4657,10 +4775,20 @@ function AdminPostCard({ post, onEdit, onDelete, onView, onDuplicate, businessCo
     sideBorder = "border-r-4 border-rose-500";
   }
   // Determine which media to show (carousel takes priority)
-  const firstCarouselItem = post.isCarousel && post.mediaItems && post.mediaItems.length > 0 ? post.mediaItems[0] : null;
-  const showCarousel = post.isCarousel && post.mediaItems && post.mediaItems.length > 1;
-  const displayMediaData = firstCarouselItem?.data || post.mediaData;
-  const displayMediaType = firstCarouselItem?.type || post.mediaType;
+  // LAZY LOADING: use useLazyMedia hook
+  const { media: lazyMedia, ref: cardRef } = useLazyMedia(post);
+  const effectiveMediaData = lazyMedia?.mediaData ?? post.mediaData;
+  const effectiveMediaType = lazyMedia?.mediaType ?? post.mediaType;
+  const effectiveMediaItems = lazyMedia?.mediaItems ?? post.mediaItems;
+  const effectiveIsCarousel = lazyMedia?.isCarousel ?? post.isCarousel;
+  
+  const firstCarouselItem = effectiveIsCarousel && effectiveMediaItems && effectiveMediaItems.length > 0 ? effectiveMediaItems[0] : null;
+  const showCarousel = effectiveIsCarousel && effectiveMediaItems && effectiveMediaItems.length > 1;
+  const displayMediaData = firstCarouselItem?.data || effectiveMediaData;
+  const displayMediaType = firstCarouselItem?.type || effectiveMediaType;
+  
+  // Show loading placeholder if we know there's media but it hasn't loaded yet
+  const isLoadingMedia = !displayMediaData && (post.hasMedia || post.hasCarousel);
   
   // Detect if post is a video (by category or keywords in title/content)
   const titleAndContent = ((post.title || "") + " " + (post.content || "")).toLowerCase();
@@ -4670,11 +4798,17 @@ function AdminPostCard({ post, onEdit, onDelete, onView, onDuplicate, businessCo
   return /* @__PURE__ */ jsxs(
     "div",
     {
+      ref: cardRef,
       className: `bg-white rounded-xl border border-slate-200 overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group ${sideBorder} flex flex-col`,
       onClick: () => onView(post),
       children: [
         /* @__PURE__ */ jsxs("div", { className: "relative w-full", style: { paddingBottom: "125%" }, children: [
-          displayMediaData ? displayMediaType === "image" ? /* @__PURE__ */ jsx(
+          isLoadingMedia ? /* @__PURE__ */ jsx("div", {
+            className: "absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center",
+            children: /* @__PURE__ */ jsx("div", {
+              className: "w-8 h-8 border-3 border-slate-300 border-t-slate-500 rounded-full animate-spin"
+            })
+          }) : displayMediaData ? displayMediaType === "image" ? /* @__PURE__ */ jsx(
             "img",
             {
               src: displayMediaData,
@@ -4834,10 +4968,20 @@ function ClientPostCard({ post, onClick }) {
     sideBorder = "border-r-4 border-rose-500";
   }
   // Determine which media to show (carousel takes priority)
-  const firstCarouselItem = post.isCarousel && post.mediaItems && post.mediaItems.length > 0 ? post.mediaItems[0] : null;
-  const showCarousel = post.isCarousel && post.mediaItems && post.mediaItems.length > 1;
-  const displayMediaData = firstCarouselItem?.data || post.mediaData;
-  const displayMediaType = firstCarouselItem?.type || post.mediaType;
+  // LAZY LOADING: use useLazyMedia hook
+  const { media: lazyMedia, ref: cardRef } = useLazyMedia(post);
+  const effectiveMediaData = lazyMedia?.mediaData ?? post.mediaData;
+  const effectiveMediaType = lazyMedia?.mediaType ?? post.mediaType;
+  const effectiveMediaItems = lazyMedia?.mediaItems ?? post.mediaItems;
+  const effectiveIsCarousel = lazyMedia?.isCarousel ?? post.isCarousel;
+  
+  const firstCarouselItem = effectiveIsCarousel && effectiveMediaItems && effectiveMediaItems.length > 0 ? effectiveMediaItems[0] : null;
+  const showCarousel = effectiveIsCarousel && effectiveMediaItems && effectiveMediaItems.length > 1;
+  const displayMediaData = firstCarouselItem?.data || effectiveMediaData;
+  const displayMediaType = firstCarouselItem?.type || effectiveMediaType;
+  
+  // Show loading placeholder if we know there's media but it hasn't loaded yet
+  const isLoadingMedia = !displayMediaData && (post.hasMedia || post.hasCarousel);
   
   // Detect if post is a video (by category or keywords in title/content)
   const titleAndContent = ((post.title || "") + " " + (post.content || "")).toLowerCase();
@@ -4847,11 +4991,17 @@ function ClientPostCard({ post, onClick }) {
   return /* @__PURE__ */ jsxs(
     "div",
     {
+      ref: cardRef,
       className: `bg-white rounded-xl border border-slate-200 overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 ${sideBorder} flex flex-col`,
       onClick,
       children: [
         /* @__PURE__ */ jsxs("div", { className: "relative w-full", style: { paddingBottom: "125%" }, children: [
-          displayMediaData ? displayMediaType === "image" ? /* @__PURE__ */ jsx(
+          isLoadingMedia ? /* @__PURE__ */ jsx("div", {
+            className: "absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center",
+            children: /* @__PURE__ */ jsx("div", {
+              className: "w-8 h-8 border-3 border-slate-300 border-t-slate-500 rounded-full animate-spin"
+            })
+          }) : displayMediaData ? displayMediaType === "image" ? /* @__PURE__ */ jsx(
             "img",
             {
               src: displayMediaData,
@@ -4958,12 +5108,47 @@ function ClientPostCard({ post, onClick }) {
 }
 function PostMediaGallery({ post }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [loadedMedia, setLoadedMedia] = useState(null);
+  
+  // Lazy load full media when modal opens (if not already loaded)
+  useEffect(() => {
+    // If post already has full media data, no need to fetch
+    if (post.mediaData || (post.mediaItems && post.mediaItems.length > 0)) {
+      return;
+    }
+    // If post indicates it has media, fetch it
+    if (post.hasMedia || post.hasCarousel) {
+      // Check cache first
+      if (_mediaCache.has(post.id)) {
+        setLoadedMedia(_mediaCache.get(post.id));
+      } else {
+        fetchPostMedia(post.id).then(data => {
+          if (data) setLoadedMedia(data);
+        });
+      }
+    }
+  }, [post.id, post.hasMedia, post.hasCarousel, post.mediaData, post.mediaItems]);
+  
+  // Use loaded media if available, else fall back to post
+  const effective = loadedMedia || post;
   
   // Determine what to show
-  const isCarousel = post.isCarousel && post.mediaItems && post.mediaItems.length > 0;
-  const items = isCarousel ? post.mediaItems : (post.mediaData ? [{ type: post.mediaType, data: post.mediaData, name: post.mediaName }] : []);
+  const isCarousel = effective.isCarousel && effective.mediaItems && effective.mediaItems.length > 0;
+  const items = isCarousel ? effective.mediaItems : (effective.mediaData ? [{ type: effective.mediaType, data: effective.mediaData, name: effective.mediaName }] : []);
   
-  if (items.length === 0) return null;
+  // Show loading spinner if waiting for media
+  if (items.length === 0) {
+    if (post.hasMedia || post.hasCarousel) {
+      return /* @__PURE__ */ jsx("div", {
+        className: "rounded-xl bg-slate-100 flex items-center justify-center",
+        style: { minHeight: 200 },
+        children: /* @__PURE__ */ jsx("div", {
+          className: "w-10 h-10 border-4 border-slate-300 border-t-slate-600 rounded-full animate-spin"
+        })
+      });
+    }
+    return null;
+  }
   
   const total = items.length;
   const current = items[currentIndex] || items[0];
@@ -4977,13 +5162,51 @@ function PostMediaGallery({ post }) {
     setCurrentIndex((currentIndex - 1 + total) % total);
   };
   
+  // Download current media at full quality
+  const handleDownload = (e) => {
+    e.stopPropagation();
+    if (!current.data) return;
+    try {
+      // Generate a safe filename
+      let filename = current.name || '';
+      if (!filename) {
+        const ext = current.type === 'video' 
+          ? (current.data.startsWith('data:video/mp4') ? 'mp4' : 'webm')
+          : (current.data.startsWith('data:image/png') ? 'png' 
+             : current.data.startsWith('data:image/gif') ? 'gif'
+             : current.data.startsWith('data:image/webp') ? 'webp'
+             : 'jpg');
+        const businessSlug = (post.businessName || 'post').replace(/[^\w\u0590-\u05FF]+/g, '_').substring(0, 30);
+        filename = `${businessSlug}_${post.id}${total > 1 ? '_' + (currentIndex + 1) : ''}.${ext}`;
+      }
+      // Create download link
+      const link = document.createElement('a');
+      link.href = current.data;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D4\u05D5\u05E8\u05D3\u05D4');
+    }
+  };
+  
   return /* @__PURE__ */ jsxs("div", { 
-    className: "rounded-xl overflow-hidden bg-slate-900 relative",
+    className: "rounded-xl overflow-hidden bg-slate-900 relative group/gallery",
     children: [
       // Media display
       current.type === "image" 
         ? /* @__PURE__ */ jsx("img", { src: current.data, alt: "", className: "w-full max-h-[500px] object-contain bg-slate-100" })
         : /* @__PURE__ */ jsx("video", { src: current.data, controls: true, className: "w-full max-h-[500px] bg-black" }),
+      
+      // Download button (top-left corner)
+      /* @__PURE__ */ jsx("button", {
+        onClick: handleDownload,
+        className: "absolute top-3 left-3 p-2 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full shadow-lg transition opacity-70 hover:opacity-100",
+        title: "\u05D4\u05D5\u05E8\u05D3 \u05D1\u05D0\u05D9\u05DB\u05D5\u05EA \u05DE\u05DC\u05D0\u05D4",
+        children: /* @__PURE__ */ jsx(Download, { className: "w-5 h-5 text-white" })
+      }),
       
       // Carousel controls - only show if multiple items
       total > 1 && /* @__PURE__ */ jsxs(Fragment, { children: [

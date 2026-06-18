@@ -218,18 +218,41 @@ try {
         case 'posts':
             if ($method === 'GET') {
                 $business = $_GET['business'] ?? '';
-                if ($business) {
-                    $stmt = $pdo->prepare("SELECT * FROM posts WHERE businessName = ? ORDER BY date DESC, time DESC");
-                    $stmt->execute([$business]);
+                $full = $_GET['full'] ?? '';  // if 'full=1' returns everything including media
+                
+                // OPTIMIZATION: by default, exclude heavy media data
+                // Frontend can request media separately via ?action=post_media&id=X
+                if ($full === '1') {
+                    // Return everything (legacy mode)
+                    if ($business) {
+                        $stmt = $pdo->prepare("SELECT * FROM posts WHERE businessName = ? ORDER BY date DESC, time DESC");
+                        $stmt->execute([$business]);
+                    } else {
+                        $stmt = $pdo->query("SELECT * FROM posts ORDER BY date DESC, time DESC");
+                    }
                 } else {
-                    $stmt = $pdo->query("SELECT * FROM posts ORDER BY date DESC, time DESC");
+                    // OPTIMIZED: exclude mediaData and mediaItems (the heavy fields)
+                    // Include only thumbnail flag - frontend will lazy load
+                    $cols = "id, businessName, title, content, date, time, platforms,
+                             mediaUrl, mediaName, mediaType,
+                             CASE WHEN mediaData IS NOT NULL AND mediaData != '' THEN 1 ELSE 0 END AS hasMedia,
+                             CASE WHEN isCarousel = 1 THEN 1 ELSE 0 END AS isCarousel,
+                             CASE WHEN mediaItems IS NOT NULL AND mediaItems != '' THEN 1 ELSE 0 END AS hasCarousel,
+                             category, status, clientApproval, publishStatus, publishedAt, publishedTo,
+                             chatMessages, editHistory, createdBy, createdAt, updatedAt";
+                    if ($business) {
+                        $stmt = $pdo->prepare("SELECT $cols FROM posts WHERE businessName = ? ORDER BY date DESC, time DESC");
+                        $stmt->execute([$business]);
+                    } else {
+                        $stmt = $pdo->query("SELECT $cols FROM posts ORDER BY date DESC, time DESC");
+                    }
                 }
                 $rows = $stmt->fetchAll();
                 foreach ($rows as &$row) {
                     if ($row['platforms']) $row['platforms'] = json_decode($row['platforms'], true);
                     if ($row['clientApproval']) $row['clientApproval'] = json_decode($row['clientApproval'], true);
                     if ($row['chatMessages']) {
-                        $row['messages'] = json_decode($row['chatMessages'], true);  // map for frontend
+                        $row['messages'] = json_decode($row['chatMessages'], true);
                         $row['chatMessages'] = $row['messages'];
                     }
                     if ($row['editHistory']) {
@@ -243,6 +266,13 @@ try {
                     }
                     if (isset($row['isCarousel'])) {
                         $row['isCarousel'] = (bool)$row['isCarousel'];
+                    }
+                    // Optimized mode flags (lazy loading hints)
+                    if (isset($row['hasMedia'])) {
+                        $row['hasMedia'] = (bool)$row['hasMedia'];
+                    }
+                    if (isset($row['hasCarousel'])) {
+                        $row['hasCarousel'] = (bool)$row['hasCarousel'];
                     }
                 }
                 respond($rows);
@@ -370,6 +400,26 @@ try {
             break;
 
         // ============== BRANDING ==============
+        // ============== POST MEDIA (lazy loading - returns just the media data) ==============
+        case 'post_media':
+            if ($method === 'GET') {
+                $id = $_GET['id'] ?? '';
+                if (!$id) error('Missing id');
+                $stmt = $pdo->prepare("SELECT id, mediaData, mediaType, mediaName, mediaItems, isCarousel FROM posts WHERE id = ?");
+                $stmt->execute([$id]);
+                $row = $stmt->fetch();
+                if (!$row) error('Post not found');
+                // Decode mediaItems if exists
+                if (isset($row['mediaItems']) && $row['mediaItems']) {
+                    $row['mediaItems'] = json_decode($row['mediaItems'], true);
+                }
+                if (isset($row['isCarousel'])) {
+                    $row['isCarousel'] = (bool)$row['isCarousel'];
+                }
+                respond($row);
+            }
+            break;
+        
         case 'branding':
             if ($method === 'GET') {
                 $row = $pdo->query("SELECT * FROM branding WHERE id = 1 LIMIT 1")->fetch();
@@ -628,7 +678,7 @@ try {
 
         // ============== PING (test endpoint) ==============
         case 'ping':
-            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.9.2-php']);
+            respond(['ok' => true, 'message' => 'pong', 'time' => date('c'), 'db' => 'connected', 'version' => 'v2.9.4-php']);
             break;
 
         default:
