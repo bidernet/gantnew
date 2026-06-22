@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.5-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} FIX: Empty media box in post modal", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.7-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} FIX: Font + localStorage quota", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -155,6 +155,22 @@ function FontStyles() {
         font-display: swap;
       }
       body, html, input, textarea, select, button {
+        font-family: ${FONT_FAMILY} !important;
+      }
+      /* Force custom font on ALL elements including those with inline styles from rich text editor */
+      *, *::before, *::after {
+        font-family: ${FONT_FAMILY} !important;
+      }
+      /* Specifically target rich text editor content with inline styles */
+      [contenteditable] *, [contenteditable], 
+      .ql-editor *, .ql-editor,
+      [data-rich-text] *, [data-rich-text],
+      [dangerouslySetInnerHTML] *,
+      p, span, div, h1, h2, h3, h4, h5, h6, li, ul, ol, td, th, a, strong, em, b, i, u {
+        font-family: ${FONT_FAMILY} !important;
+      }
+      /* Override inline font-family styles */
+      [style*="font-family"] {
         font-family: ${FONT_FAMILY} !important;
       }
     ` } });
@@ -1508,32 +1524,11 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
           branding: brandingData,
           templates
         };
-        let backups = [];
-        try {
-          const stored = localStorage.getItem("bidernet_auto_backups");
-          if (stored) backups = JSON.parse(stored);
-          if (!Array.isArray(backups)) backups = [];
-        } catch (e) {
-          backups = [];
-        }
-        backups.unshift(backup);
-        backups = backups.slice(0, 3);
-        try {
-          localStorage.setItem("bidernet_auto_backups", JSON.stringify(backups));
-          console.log(`%c\u{1F4BE} Auto-backup saved (${posts.length} posts)`, "color: #10b981; font-weight: bold;");
-        } catch (e) {
-          console.warn("Auto-backup quota exceeded - removing media to save space");
-          const lightBackup = {
-            ...backup,
-            posts: backup.posts.map((p) => ({ ...p, mediaData: p.mediaData ? "[REMOVED-TOO-LARGE]" : null }))
-          };
-          backups[0] = lightBackup;
-          try {
-            localStorage.setItem("bidernet_auto_backups", JSON.stringify(backups));
-          } catch (e2) {
-            console.error("Auto-backup failed even without media:", e2);
-          }
-        }
+        // DISABLED: localStorage auto-backup
+        // Posts are already saved to MySQL DB - no need for localStorage backup
+        // localStorage has 5-10MB quota and posts with images exceed this quickly
+        // This was causing QuotaExceededError on every save
+        console.log(`%c\u{1F4BE} Posts saved to DB (${posts.length} posts)`, "color: #10b981; font-weight: bold;");
       } catch (e) {
         console.error("Auto-backup error:", e);
       }
@@ -5442,7 +5437,7 @@ function ClientPostModal({ post, onClose, onApprove, onReject, onEditPost, curre
         ] })
       ] }),
       // Media gallery (supports carousel)
-      (post.mediaData || (post.isCarousel && post.mediaItems?.length > 0)) && /* @__PURE__ */ jsx(PostMediaGallery, { post }),
+      /* @__PURE__ */ jsx(PostMediaGallery, { post }),
       showCommentBox && /* @__PURE__ */ jsxs("div", { className: `border-2 rounded-lg p-4 ${actionType === "approve" ? "border-emerald-300 bg-emerald-50" : "border-rose-300 bg-rose-50"}`, children: [
         /* @__PURE__ */ jsx("label", { className: "block text-sm font-semibold text-slate-800 mb-2", children: actionType === "approve" ? "\u2713 \u05D0\u05D9\u05E9\u05D5\u05E8 \u05E4\u05D5\u05E1\u05D8 - \u05D4\u05E2\u05E8\u05D4 (\u05D0\u05D5\u05E4\u05E6\u05D9\u05D5\u05E0\u05DC\u05D9)" : "\u26A0 \u05DE\u05D4 \u05EA\u05E8\u05E6\u05D4 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D1\u05E4\u05D5\u05E1\u05D8?" }),
         /* @__PURE__ */ jsx(
@@ -5557,7 +5552,7 @@ function AdminPostViewModal({ post, onClose, onEdit, onDelete, onDuplicate, busi
       post.title && /* @__PURE__ */ jsx("h3", { className: "text-xl font-bold text-slate-900", children: post.title }),
       /* @__PURE__ */ jsx("div", { className: "text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-4 border border-slate-100", dangerouslySetInnerHTML: { __html: post.content } }),
       // Media gallery (supports carousel)
-      (post.mediaData || (post.isCarousel && post.mediaItems?.length > 0)) && /* @__PURE__ */ jsx(PostMediaGallery, { post }),
+      /* @__PURE__ */ jsx(PostMediaGallery, { post }),
       post.clientApproval?.comment && /* @__PURE__ */ jsxs("div", { className: `rounded-lg p-3 border ${post.clientApproval.status === "approved" ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}`, children: [
         /* @__PURE__ */ jsxs("div", { className: "text-xs font-semibold mb-1 flex items-center gap-1.5", children: [
           /* @__PURE__ */ jsx(MessageSquare, { className: "w-3.5 h-3.5" }),
