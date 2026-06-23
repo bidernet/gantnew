@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.7-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} FIX: Font + localStorage quota", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.8-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} FIX: Sort order + copy button", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -283,13 +283,36 @@ function QuestionnairesView({ currentUser, saveUsers, users }) {
     }
   };
   
-  const copyLink = (q) => {
+  const copyLink = async (q) => {
     const link = `${window.location.origin}/?q=${encodeURIComponent(q.id)}`;
-    navigator.clipboard.writeText(link).then(() => {
+    let success = false;
+    
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(link);
+        success = true;
+      } catch (e) {}
+    }
+    
+    if (!success) {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = link;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        success = document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } catch (e) {}
+    }
+    
+    if (success) {
       alert("\u05D4\u05DC\u05D9\u05E0\u05E7 \u05D4\u05D5\u05E2\u05EA\u05E7:\n" + link);
-    }).catch(() => {
+    } else {
       prompt("\u05D4\u05E2\u05EA\u05E7 \u05D0\u05EA \u05D4\u05DC\u05D9\u05E0\u05E7:", link);
-    });
+    }
   };
   
   const convertResponseToClient = async (response) => {
@@ -3408,17 +3431,34 @@ function PublishDetailModal({ post, client, onClose, onPublished, onDelete }) {
   const [step, setStep] = useState(1);
   const cleanText = stripHtml(post.content);
   const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(cleanText);
+    let success = false;
+    
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(cleanText);
+        success = true;
+      } catch (e) {}
+    }
+    
+    if (!success) {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = cleanText;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        success = document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } catch (e) {}
+    }
+    
+    if (success) {
       setCopiedText(true);
       setTimeout(() => setCopiedText(false), 2500);
-    } catch (e) {
-      const input = document.createElement("textarea");
-      input.value = cleanText;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand("copy");
-      document.body.removeChild(input);
+    } else {
+      window.prompt("\u05D4\u05E2\u05EA\u05E7 \u05D0\u05EA \u05D4\u05D8\u05E7\u05E1\u05D8 \u05D9\u05D3\u05E0\u05D9\u05EA:", cleanText);
       setCopiedText(true);
       setTimeout(() => setCopiedText(false), 2500);
     }
@@ -3959,17 +3999,52 @@ function ShareLinkModal({ user, posts = [], branding = null, onClose, onRegenera
   const shareUrl = `${baseUrl}#share=${user.shareToken}`;
   const clientPostCount = posts.filter((p) => p.businessName === user.businessName).length;
   const copyToClipboard = async (url = shareUrl) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch (e) {
-      const input = document.createElement("input");
-      input.value = url;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand("copy");
-      document.body.removeChild(input);
+    let success = false;
+    
+    // Method 1: Modern Clipboard API (works on HTTPS only)
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(url);
+        success = true;
+      } catch (e) {
+        console.warn("Clipboard API failed:", e);
+      }
+    }
+    
+    // Method 2: Fallback - textarea + execCommand (works on HTTP, older browsers, mobile)
+    if (!success) {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = url;
+        textarea.style.position = "fixed";
+        textarea.style.top = "0";
+        textarea.style.left = "0";
+        textarea.style.width = "2em";
+        textarea.style.height = "2em";
+        textarea.style.padding = "0";
+        textarea.style.border = "none";
+        textarea.style.outline = "none";
+        textarea.style.boxShadow = "none";
+        textarea.style.background = "transparent";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        textarea.setSelectionRange(0, url.length);
+        success = document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } catch (e) {
+        console.error("Fallback copy failed:", e);
+      }
+    }
+    
+    // Method 3: Last resort - prompt user to copy manually
+    if (!success) {
+      window.prompt("\u05D4\u05E2\u05EA\u05E7 \u05D0\u05EA \u05D4\u05DC\u05D9\u05E0\u05E7 \u05D9\u05D3\u05E0\u05D9\u05EA (Ctrl+C / Cmd+C):", url);
+      success = true;
+    }
+    
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     }
@@ -4944,9 +5019,9 @@ function ClientTimelineView({ posts, onPostClick }) {
     ] });
   }
   const sortedPosts = [...posts].sort((a, b) => {
-    const dateCompare = new Date(b.date) - new Date(a.date);
+    const dateCompare = new Date(a.date) - new Date(b.date);
     if (dateCompare !== 0) return dateCompare;
-    return (b.time || "").localeCompare(a.time || "");
+    return (a.time || "").localeCompare(b.time || "");
   });
   return /* @__PURE__ */ jsx("div", { className: "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3", children: sortedPosts.map((post) => /* @__PURE__ */ jsx(
     ClientPostCard,
