@@ -7,8 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, Image as ImageIcon, Video, Trash2, Edit3, X, Building2, Download, Upload, ChevronLeft, ChevronRight, FileText, Clock, Search, LogOut, User, Lock, Users, CheckCircle, XCircle, MessageSquare, Eye, EyeOff, Shield, AlertCircle, Send, ThumbsUp, Settings, Bold, Italic, Underline, Link as LinkIcon, List, ListOrdered, AlignRight, AlignCenter, AlignLeft, Smile, Hash, Sparkles, Copy, Save, Tag, BarChart3, History, MessageCircle, Package, Sun, Sunset, Moon } from "lucide-react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 if (typeof window !== "undefined") {
-  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.8-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
-  console.log("%c\u{1F0CF} FIX: Sort order + copy button", "color: #013d19; font-weight: bold;");
+  console.log("%c\u{1F3AF} bidernet Content Calendar v2.9.9-php", "color: #013d19; font-size: 14px; font-weight: bold; background: #d7ff00; padding: 4px 8px; border-radius: 4px;");
+  console.log("%c\u{1F0CF} CRITICAL FIX: Prevent image loss on approval", "color: #013d19; font-weight: bold;");
   console.log("%c\u2728 Server-backed via /api.php (MySQL on ClickPress)", "color: #10b981;");
   console.log("%c\u{1F4A1} Test: apiPing() in console", "color: #f59e0b;");
 }
@@ -1615,12 +1615,14 @@ function AdminDashboard({ user, onLogout, branding, updateBranding }) {
     
     // SAFETY: Before saving, ensure media data is loaded if the post has it
     // This prevents accidentally overwriting media with empty data
+    // IMPORTANT: We check for missing media even without flags (legacy posts don't have flags)
     for (let i = 0; i < toUpsert.length; i++) {
       const p = toUpsert[i];
-      // If post indicates it has media but doesn't have mediaData/mediaItems in memory, fetch it
-      if ((p.hasMedia || p.hasCarousel) && !p.mediaData && !(p.mediaItems && p.mediaItems.length > 0)) {
+      // If post doesn't have mediaData/mediaItems in memory, try to fetch it from server
+      // This protects both new lazy-loaded posts AND legacy posts without flags
+      if (!p.mediaData && !(p.mediaItems && p.mediaItems.length > 0)) {
         const fullMedia = await fetchPostMedia(p.id);
-        if (fullMedia) {
+        if (fullMedia && (fullMedia.mediaData || (fullMedia.mediaItems && fullMedia.mediaItems.length > 0))) {
           toUpsert[i] = { ...p, ...fullMedia };
         }
       }
@@ -2297,6 +2299,33 @@ function ClientDashboard({ user, onLogout, branding }) {
     const newIds = new Set(updatedClientPosts.map((p) => p.id));
     const toDelete = posts.filter((p) => !newIds.has(p.id));
     console.log(`[Client] savePosts: ${toUpsert.length} upsert, ${toDelete.length} delete`);
+    
+    // CRITICAL SAFETY: Ensure media data is loaded before saving
+    // Prevents accidentally wiping images due to lazy loading
+    for (let i = 0; i < toUpsert.length; i++) {
+      const p = toUpsert[i];
+      if (!p.mediaData && !(p.mediaItems && p.mediaItems.length > 0)) {
+        try {
+          const mediaRes = await fetch(`/api.php?action=post_media&id=${encodeURIComponent(p.id)}`);
+          if (mediaRes.ok) {
+            const mediaData = await mediaRes.json();
+            if (mediaData && (mediaData.mediaData || (mediaData.mediaItems && mediaData.mediaItems.length > 0))) {
+              toUpsert[i] = {
+                ...p,
+                mediaData: mediaData.mediaData,
+                mediaType: mediaData.mediaType,
+                mediaName: mediaData.mediaName,
+                mediaItems: mediaData.mediaItems,
+                isCarousel: mediaData.isCarousel
+              };
+            }
+          }
+        } catch (e) {
+          console.error(`Failed to load media for post ${p.id}:`, e);
+        }
+      }
+    }
+    
     const errors = [];
     for (const post of toUpsert) {
       try {
@@ -2354,6 +2383,29 @@ function ClientDashboard({ user, onLogout, branding }) {
       return p;
     });
     if (updatedPost) {
+      // CRITICAL FIX: Load full media data before saving to prevent losing images
+      // Because of lazy loading, the post in memory may not have mediaData/mediaItems
+      // If we don't load them first, we'll overwrite the DB record with empty media!
+      if (!updatedPost.mediaData && !(updatedPost.mediaItems && updatedPost.mediaItems.length > 0)) {
+        try {
+          const mediaRes = await fetch(`/api.php?action=post_media&id=${encodeURIComponent(postId)}`);
+          if (mediaRes.ok) {
+            const mediaData = await mediaRes.json();
+            if (mediaData) {
+              updatedPost = {
+                ...updatedPost,
+                mediaData: mediaData.mediaData,
+                mediaType: mediaData.mediaType,
+                mediaName: mediaData.mediaName,
+                mediaItems: mediaData.mediaItems,
+                isCarousel: mediaData.isCarousel
+              };
+            }
+          }
+        } catch (e) {
+          console.error("Failed to load media before save:", e);
+        }
+      }
       try {
         const res = await fetch("/api.php?action=posts", {
           method: "POST",
@@ -2599,7 +2651,7 @@ function ClientDashboard({ user, onLogout, branding }) {
         onEditPost: async (newContent) => {
           const now = (/* @__PURE__ */ new Date()).toISOString();
           const oldContent = selectedPost.content || "";
-          const updatedPost = {
+          let updatedPost = {
             ...selectedPost,
             content: newContent,
             // Edit also clears any previous rejection so admin sees the new content
@@ -2611,6 +2663,29 @@ function ClientDashboard({ user, onLogout, branding }) {
               details: `\u05DE\u05EA\u05D5\u05DB\u05DF: "${stripHtml(oldContent).substring(0, 80)}..." \u2192 "${stripHtml(newContent).substring(0, 80)}..."`
             }]
           };
+          
+          // CRITICAL SAFETY: Load media before saving to prevent losing images
+          if (!updatedPost.mediaData && !(updatedPost.mediaItems && updatedPost.mediaItems.length > 0)) {
+            try {
+              const mediaRes = await fetch(`/api.php?action=post_media&id=${encodeURIComponent(selectedPost.id)}`);
+              if (mediaRes.ok) {
+                const mediaData = await mediaRes.json();
+                if (mediaData) {
+                  updatedPost = {
+                    ...updatedPost,
+                    mediaData: mediaData.mediaData,
+                    mediaType: mediaData.mediaType,
+                    mediaName: mediaData.mediaName,
+                    mediaItems: mediaData.mediaItems,
+                    isCarousel: mediaData.isCarousel
+                  };
+                }
+              }
+            } catch (e) {
+              console.error("Failed to load media before edit save:", e);
+            }
+          }
+          
           try {
             const res = await fetch("/api.php?action=posts", {
               method: "POST",
